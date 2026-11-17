@@ -11,5 +11,10 @@
   "wallpaper": false,
   "show_inputs_pill": false,
   "live_tv_package": "",
-  "tile_menu": true
+  "tile_menu": true,
+  "restore_key_services": true,
+  "app_keys": [
+    "190:com.google.android.youtube.tv",
+    "191:com.dpsteam.filmplus"
+  ]
 }
