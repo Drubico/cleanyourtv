@@ -3,6 +3,7 @@ package com.gathin.tvhome;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -10,17 +11,17 @@ import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
-import android.widget.TextView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /** Remote-friendly settings owned by the launcher; system settings stay one row away. */
-public final class LauncherSettingsActivity extends Activity {
+public final class LauncherSettingsActivity extends Activity
+        implements View.OnClickListener, DialogInterface.OnClickListener {
     @Override
     protected void attachBaseContext(android.content.Context base) {
         super.attachBaseContext(LauncherLocale.wrap(base));   // locale
@@ -45,6 +46,9 @@ public final class LauncherSettingsActivity extends Activity {
     private String clockFormat;
     private boolean animations;
     private boolean advancedEffects;
+    private int dialogMode;
+    private List<File> pickerImages;
+    private List<String[]> pickerApps;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -54,10 +58,7 @@ public final class LauncherSettingsActivity extends Activity {
         Config config = Config.load(this);
         View reorderChoice = findViewById(R.id.reorderChoice);
         reorderChoice.setVisibility(config.launcherSettingsButton ? View.VISIBLE : View.GONE);
-        reorderChoice.setOnClickListener(v -> {
-            setResult(RESULT_OK, new Intent().putExtra(EXTRA_REORDER, true));
-            finish();
-        });
+        reorderChoice.setOnClickListener(this);
         columns = config.columns;
         rowsBelowDock = config.rowsBelowDock;
         dockOpacity = config.dockOpacity;
@@ -67,51 +68,27 @@ public final class LauncherSettingsActivity extends Activity {
 
         int[] ids = {R.id.columns4, R.id.columns5, R.id.columns6, R.id.columns7};
         for (int i = 0; i < ids.length; i++) {
-            final int value = i + 4;
             columnChoices[i] = findViewById(ids[i]);
-            columnChoices[i].setOnClickListener(v -> {
-                if (columns == value) return;
-                columns = value;
-                choices.edit().putInt("columns", value).apply();
-                changed();
-                refresh();
-            });
+            columnChoices[i].setTag(i + 4);
+            columnChoices[i].setOnClickListener(this);
         }
         int[] rowIds = {R.id.rows0, R.id.rows1, R.id.rows2, R.id.rows3};
         for (int i = 0; i < rowIds.length; i++) {
-            final int value = i;
             rowChoices[i] = findViewById(rowIds[i]);
-            rowChoices[i].setOnClickListener(v -> {
-                if (rowsBelowDock == value) return;
-                rowsBelowDock = value;
-                choices.edit().putInt(Config.ROWS_BELOW_DOCK_KEY, value).apply();
-                changed();
-                refresh();
-            });
+            rowChoices[i].setTag(i);
+            rowChoices[i].setOnClickListener(this);
         }
         int[] dockIds = {R.id.dock100, R.id.dock70, R.id.dock50, R.id.dock30};
         for (int i = 0; i < dockIds.length; i++) {
-            final int value = DOCK_OPACITIES[i];
             dockChoices[i] = findViewById(dockIds[i]);
-            dockChoices[i].setOnClickListener(v -> {
-                if (dockOpacity == value) return;
-                dockOpacity = value;
-                choices.edit().putInt(Config.DOCK_OPACITY_KEY, value).apply();
-                changed();
-                refresh();
-            });
+            dockChoices[i].setTag(DOCK_OPACITIES[i]);
+            dockChoices[i].setOnClickListener(this);
         }
         int[] clockIds = {R.id.clockSystem, R.id.clock12, R.id.clock24};
         for (int i = 0; i < clockIds.length; i++) {
-            final String value = CLOCK_FORMATS[i];
             clockChoices[i] = findViewById(clockIds[i]);
-            clockChoices[i].setOnClickListener(v -> {
-                if (value.equals(clockFormat)) return;
-                clockFormat = value;
-                choices.edit().putString(Config.CLOCK_FORMAT_KEY, value).apply();
-                changed();
-                refresh();
-            });
+            clockChoices[i].setTag(CLOCK_FORMATS[i]);
+            clockChoices[i].setOnClickListener(this);
         }
         // Mirror text alignment without globally opting the launcher into RTL. Numeric rows
         // still need explicit ordering in Android's no-supportsRtl compatibility mode.
@@ -124,36 +101,53 @@ public final class LauncherSettingsActivity extends Activity {
             reverseRow(clockChoices);
         }
         wallpaperChoice = findViewById(R.id.wallpaperChoice);
-        wallpaperChoice.setOnClickListener(v -> showWallpaperPicker());
+        wallpaperChoice.setOnClickListener(this);
         animationsChoice = findViewById(R.id.animationsChoice);
-        animationsChoice.setOnClickListener(v -> {
-            animations = !animations;
-            if (!animations) advancedEffects = false;
-            choices.edit().putBoolean("animations", animations)
-                    .putBoolean("advanced_effects", advancedEffects).apply();
-            changed();
-            refresh();
-        });
+        animationsChoice.setOnClickListener(this);
         advancedChoice = findViewById(R.id.advancedChoice);
-        advancedChoice.setOnClickListener(v -> {
-            if (advancedEffects) {
-                setAdvanced(false);
-            } else {
-                new AlertDialog.Builder(this)
-                        .setTitle(R.string.advanced_effects)
-                        .setMessage(R.string.advanced_effects_warning)
-                        .setPositiveButton(R.string.enable, (dialog, which) -> setAdvanced(true))
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show();
-            }
-        });
+        advancedChoice.setOnClickListener(this);
         openOnStartChoice = findViewById(R.id.openOnStartChoice);
         if (config.openOnStartChoice) {
             openOnStartChoice.setVisibility(View.VISIBLE);
-            openOnStartChoice.setOnClickListener(v -> showOpenOnStartPicker());
+            openOnStartChoice.setOnClickListener(this);
         }
         followThemeChoice = findViewById(R.id.followThemeChoice);
-        followThemeChoice.setOnClickListener(v -> {
+        followThemeChoice.setOnClickListener(this);
+        findViewById(R.id.defaultHomeChoice).setOnClickListener(this);
+        findViewById(R.id.tvSettingsChoice).setOnClickListener(this);
+        refresh();
+        if (config.launcherSettingsButton) reorderChoice.requestFocus();
+        else columnChoices[Math.max(0, Math.min(columns - 4, 3))].requestFocus();
+    }
+
+    @Override
+    public void onClick(View v) {
+        int id = v.getId();
+        if (id == R.id.reorderChoice) {
+            setResult(RESULT_OK, new Intent().putExtra(EXTRA_REORDER, true));
+            finish();
+        } else if (id == R.id.wallpaperChoice) {
+            showWallpaperPicker();
+        } else if (id == R.id.animationsChoice) {
+            animations = !animations;
+            if (!animations) advancedEffects = false;
+            choices.edit().putBoolean("animations", animations).putBoolean("advanced_effects", advancedEffects).apply();
+            changed();
+            refresh();
+        } else if (id == R.id.advancedChoice) {
+            if (advancedEffects) setAdvanced(false);
+            else {
+                dialogMode = 0;
+                new AlertDialog.Builder(this)
+                        .setTitle(R.string.advanced_effects)
+                        .setMessage(R.string.advanced_effects_warning)
+                        .setPositiveButton(R.string.enable, this)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
+            }
+        } else if (id == R.id.openOnStartChoice) {
+            showOpenOnStartPicker();
+        } else if (id == R.id.followThemeChoice) {
             if (!hasOnTvChoices()) return;
             choices.edit().remove("columns").remove(Config.ROWS_BELOW_DOCK_KEY).remove("animations")
                     .remove("advanced_effects").remove(Config.WALLPAPER_CHOICE_KEY)
@@ -167,14 +161,35 @@ public final class LauncherSettingsActivity extends Activity {
             advancedEffects = current.animations && current.advancedEffects;
             changed();
             refresh();
-        });
-        findViewById(R.id.defaultHomeChoice).setOnClickListener(v ->
-                open(new Intent(this, HomeSettingsActivity.class)));
-        findViewById(R.id.tvSettingsChoice).setOnClickListener(v ->
-                open(SystemSettings.intent(this, Settings.ACTION_SETTINGS)));
-        refresh();
-        if (config.launcherSettingsButton) reorderChoice.requestFocus();
-        else columnChoices[Math.max(0, Math.min(columns - 4, 3))].requestFocus();
+        } else if (id == R.id.defaultHomeChoice) {
+            open(new Intent(this, HomeSettingsActivity.class));
+        } else if (id == R.id.tvSettingsChoice) {
+            open(SystemSettings.intent(this, Settings.ACTION_SETTINGS));
+        } else if (v.getTag() instanceof String) {
+            String value = (String) v.getTag();
+            if (value.equals(clockFormat)) return;
+            clockFormat = value;
+            choices.edit().putString(Config.CLOCK_FORMAT_KEY, value).apply();
+            changed();
+            refresh();
+        } else if (v.getTag() instanceof Integer) {
+            int value = (Integer) v.getTag();
+            if (id == R.id.columns4 || id == R.id.columns5 || id == R.id.columns6 || id == R.id.columns7) {
+                if (columns == value) return;
+                columns = value;
+                choices.edit().putInt("columns", value).apply();
+            } else if (id == R.id.rows0 || id == R.id.rows1 || id == R.id.rows2 || id == R.id.rows3) {
+                if (rowsBelowDock == value) return;
+                rowsBelowDock = value;
+                choices.edit().putInt(Config.ROWS_BELOW_DOCK_KEY, value).apply();
+            } else {
+                if (dockOpacity == value) return;
+                dockOpacity = value;
+                choices.edit().putInt(Config.DOCK_OPACITY_KEY, value).apply();
+            }
+            changed();
+            refresh();
+        }
     }
 
     private void reverseRow(TextView[] views) {
@@ -185,36 +200,21 @@ public final class LauncherSettingsActivity extends Activity {
 
     private void showWallpaperPicker() {
         File dir = Config.dir(this);
-        List<File> images = new java.util.ArrayList<>(WallpaperRotation.images(
+        pickerImages = new ArrayList<>(WallpaperRotation.images(
                 dir == null ? null : new File(dir, "wallpapers")));
         // A theme with a single wallpaper.jpg offers that picture too (Config maps the choice back to it).
         File single = dir == null ? null : new File(dir, Config.WALLPAPER_NAME);
-        if (single != null && single.isFile()) images.add(0, single);
-        String[] labels = new String[images.size() + 1];
-        for (int i = 0; i < images.size(); i++) labels[i] = images.get(i).getName();
-        labels[images.size()] = getString(R.string.wallpaper_none);
+        if (single != null && single.isFile()) pickerImages.add(0, single);
+        String[] labels = new String[pickerImages.size() + 1];
+        for (int i = 0; i < pickerImages.size(); i++) labels[i] = pickerImages.get(i).getName();
+        labels[pickerImages.size()] = getString(R.string.wallpaper_none);
         String current = choices.getString(Config.WALLPAPER_CHOICE_KEY, null);
-        int checked = "none".equals(current) ? images.size()
-                : indexOf(images, current);
+        int checked = "none".equals(current) ? pickerImages.size() : indexOf(pickerImages, current);
+        dialogMode = 1;
         new AlertDialog.Builder(this)
                 .setTitle(R.string.wallpaper_label)
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                    dialog.dismiss();
-                    if (which == images.size()) {
-                        choices.edit().putString(Config.WALLPAPER_CHOICE_KEY, "none").apply();
-                    } else {
-                        choices.edit().putString(Config.WALLPAPER_CHOICE_KEY,
-                                images.get(which).getName()).apply();
-                    }
-                    changed();
-                    Toast.makeText(this, R.string.wallpaper_applied, Toast.LENGTH_SHORT).show();
-                    refresh();
-                })
-                .setNeutralButton(R.string.wallpaper_theme_default, (dialog, which) -> {
-                    choices.edit().remove(Config.WALLPAPER_CHOICE_KEY).apply();
-                    changed();
-                    refresh();
-                })
+                .setSingleChoiceItems(labels, checked, this)
+                .setNeutralButton(R.string.wallpaper_theme_default, this)
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
@@ -222,37 +222,56 @@ public final class LauncherSettingsActivity extends Activity {
     /** Off, then every app with a TV entry point by name. Saved at once; it is read on the next boot. */
     private void showOpenOnStartPicker() {
         PackageManager pm = getPackageManager();
-        List<String[]> apps = new ArrayList<>();
+        pickerApps = new ArrayList<>();
         Intent tv = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
         for (ResolveInfo r : pm.queryIntentActivities(tv, 0)) {
             String pkg = r.activityInfo.packageName;
             if (pkg.equals(getPackageName())) continue;
             boolean seen = false;
-            for (String[] a : apps) seen |= a[1].equals(pkg);
-            if (!seen) apps.add(new String[]{r.loadLabel(pm).toString(), pkg});
+            for (String[] a : pickerApps) seen |= a[1].equals(pkg);
+            if (!seen) pickerApps.add(new String[]{r.loadLabel(pm).toString(), pkg});
         }
-        Collections.sort(apps, (a, b) -> a[0].compareToIgnoreCase(b[0]));
-        String[] labels = new String[apps.size() + 1];
+        pickerApps.sort((a, b) -> a[0].compareToIgnoreCase(b[0]));
+        String[] labels = new String[pickerApps.size() + 1];
         labels[0] = getString(R.string.off);
         String current = choices.getString(OpenOnStart.KEY, "");
         int checked = 0;
-        for (int i = 0; i < apps.size(); i++) {
-            labels[i + 1] = apps.get(i)[0];
-            if (apps.get(i)[1].equals(current)) checked = i + 1;
+        for (int i = 0; i < pickerApps.size(); i++) {
+            labels[i + 1] = pickerApps.get(i)[0];
+            if (pickerApps.get(i)[1].equals(current)) checked = i + 1;
         }
+        dialogMode = 2;
         new AlertDialog.Builder(this)
                 .setTitle(R.string.open_on_start_label)
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                    dialog.dismiss();
-                    if (which == 0) choices.edit().remove(OpenOnStart.KEY).apply();
-                    else {
-                        OpenOnStart.skipThisBoot(this);
-                        choices.edit().putString(OpenOnStart.KEY, apps.get(which - 1)[1]).apply();
-                    }
-                    refresh();
-                })
+                .setSingleChoiceItems(labels, checked, this)
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+    }
+
+    @Override
+    public void onClick(DialogInterface dialog, int which) {
+        if (dialogMode == 0) {
+            setAdvanced(true);
+        } else if (dialogMode == 1) {
+            if (which == DialogInterface.BUTTON_NEUTRAL) {
+                choices.edit().remove(Config.WALLPAPER_CHOICE_KEY).apply();
+            } else {
+                dialog.dismiss();
+                choices.edit().putString(Config.WALLPAPER_CHOICE_KEY,
+                        which == pickerImages.size() ? "none" : pickerImages.get(which).getName()).apply();
+                Toast.makeText(this, R.string.wallpaper_applied, Toast.LENGTH_SHORT).show();
+            }
+            changed();
+            refresh();
+        } else {
+            dialog.dismiss();
+            if (which == 0) choices.edit().remove(OpenOnStart.KEY).apply();
+            else {
+                OpenOnStart.skipThisBoot(this);
+                choices.edit().putString(OpenOnStart.KEY, pickerApps.get(which - 1)[1]).apply();
+            }
+            refresh();
+        }
     }
 
     /** The picked app's name, its package when it is gone, or Off. */

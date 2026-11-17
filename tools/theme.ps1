@@ -94,7 +94,7 @@ $clearWallpapers = "rm -f $dir/wallpapers/*.[jJ][pP][gG] $dir/wallpapers/*.[jJ][
 
 if ($Reset) {
     $checkPut = $true
-    Invoke-Tv tv.py "mkdir -p $dir 2>/dev/null; $(Drop 'config.json'); $(Drop 'wallpaper.jpg'); $(Drop 'wallpapers/captions.txt'); $clearWallpapers; printf '%s' '$revision' > $tmp-theme_revision; $(Put 'theme_revision')" | Out-Null
+    Invoke-Tv tv.py "mkdir -p $dir 2>/dev/null; $(Drop 'config.json'); $(Drop 'wallpaper.jpg'); $(Drop 'profile.jpg'); $(Drop 'profile.png'); $(Drop 'wallpapers/captions.txt'); $clearWallpapers; printf '%s' '$revision' > $tmp-theme_revision; $(Put 'theme_revision')" | Out-Null
     & $py -I theme_restart.py
     if ($LASTEXITCODE) { throw 'Home restart recovery failed' }
     Write-Host 'reset'
@@ -153,6 +153,19 @@ if (Test-Path -LiteralPath $captions -PathType Leaf) {
     Invoke-Tv tv.py (Put 'wallpapers/captions.txt') | Out-Null
 } else {
     Invoke-Tv tv.py (Drop 'wallpapers/captions.txt') | Out-Null
+}
+$profileJpg = Join-Path $Theme 'profile.jpg'
+$profilePng = Join-Path $Theme 'profile.png'
+if (Test-Path -LiteralPath $profileJpg -PathType Leaf) {
+    Invoke-Tv tv.py (Drop 'profile.png') | Out-Null
+    Invoke-Tv b64push.py $profileJpg "$tmp-profile.jpg"
+    Invoke-Tv tv.py (Put 'profile.jpg') | Out-Null
+} elseif (Test-Path -LiteralPath $profilePng -PathType Leaf) {
+    Invoke-Tv tv.py (Drop 'profile.jpg') | Out-Null
+    Invoke-Tv b64push.py $profilePng "$tmp-profile.png"
+    Invoke-Tv tv.py (Put 'profile.png') | Out-Null
+} else {
+    Invoke-Tv tv.py "$(Drop 'profile.jpg'); $(Drop 'profile.png')" | Out-Null
 }
 Invoke-Tv tv.py "printf '%s' '$revision' > $tmp-theme_revision; $(Put 'theme_revision')" | Out-Null
 & $py -I theme_restart.py

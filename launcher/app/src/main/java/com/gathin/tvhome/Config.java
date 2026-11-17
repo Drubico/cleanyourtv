@@ -299,142 +299,6 @@ final class Config {
     /** With single_row, the band runs behind every app in the row, not only the dock apps (config.xml, dock_band_all). */
     final boolean dockBandAll;
 
-    private Config(List<String> dockApps, boolean fillDock, List<String> hiddenApps, List<String> libraryApps, List<String> libraryExcludedApps, String liveTvPackage,
-                   String liveTvAction, String liveTvInputId, Map<String, String> launchActions, Map<String, String> appLabels,
-                   Map<String, String> appBanners, String sourcePanelService, String sourcePanelAction,
-                   String sourcePanelExtra, boolean coocaaSources, String inputAction, List<String> inputSources,
-                   String inputUriScheme, int columns, int rowsBelowDock, boolean animations, boolean advancedEffects,
-                   boolean shamsiDate, String greetingName, boolean moduleCards, boolean reducedMotion, boolean bootToLiveTv, boolean openOnStartChoice, boolean dockTitle, boolean dockRow, boolean topMenu, boolean launcherSettingsButton, boolean reorderButton, boolean showNetworkPill, boolean showInputsPill, boolean iconOnlyButtons, boolean iconOnlyInputs, boolean libraryButton, boolean showLibraryPill, int wifiLabelWidth, boolean alwaysShowNames, boolean wallpaperTrueColor, boolean focusOvershoot, String vpnApp,
-                   boolean showHomeSettingsShortcut, boolean showStats, String gameDay, boolean appLibrary, boolean appLibrarySelection, boolean libraryOkOpens, boolean uniformTiles, int backgroundColor, int skyIntensity,
-                   int[] settingsKeycodes, boolean settingsKeyPanel, boolean restoreKeyServices, boolean wallpaperEnabled, File wallpaper, List<File> wallpapers,
-                   int wallpaperRotationMinutes, int wallpaperDim, int dockOpacity, String wallpaperOrder, boolean overlayApplied,
-                   Festival festival, int[] inputKeycodes, List<String> appKeys, String stockHomeRedirect,
-                   List<RaceWeekend.Race> raceCalendar, boolean cinematicHome, boolean ambientGlow, boolean appGlow, boolean fadeRows, int homeIdleClockMinutes,
-                   boolean keyFilter, boolean dockGlass, String glowStyle, boolean wallpaperCaptions,
-                   boolean handleViewInputs, boolean tileMenu, boolean dockEvenPadding, boolean dockBand, boolean cinematicDots, boolean cinematicWhiteFocus, boolean wifiStatusColor, int cinematicScrim, int cinematicArt,
-                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean homeIgnoreChannelKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean inputsConnectedOnly, boolean inputsCecStateOnly,
-                   int openOnStartNetworkWait, boolean openOnStartOnWake, boolean iconOnlyVpn, String clockFormat, boolean backOpensClock, boolean glowSnap,
-                   boolean settingsKeyClearTask) {
-        this.handleViewInputs = handleViewInputs;
-        this.tileMenu = tileMenu;
-        this.inputKeycodes = inputKeycodes;
-        this.appKeys = Collections.unmodifiableList(appKeys);
-        this.keyFilter = keyFilter;
-        this.stockHomeRedirect = stockHomeRedirect;
-        this.dockApps = Collections.unmodifiableList(dockApps);
-        this.fillDock = fillDock;
-        this.hiddenApps = Collections.unmodifiableList(hiddenApps);
-        this.libraryApps = Collections.unmodifiableList(libraryApps);
-        this.libraryExcludedApps = Collections.unmodifiableList(libraryExcludedApps);
-        this.liveTvPackage = liveTvPackage;
-        this.liveTvAction = liveTvAction;
-        this.liveTvInputId = liveTvInputId;
-        this.launchActions = Collections.unmodifiableMap(launchActions);
-        this.appLabels = Collections.unmodifiableMap(appLabels);
-        this.appBanners = Collections.unmodifiableMap(appBanners);
-        this.sourcePanelService = sourcePanelService;
-        this.sourcePanelAction = sourcePanelAction;
-        this.sourcePanelExtra = sourcePanelExtra;
-        this.coocaaSources = coocaaSources;
-        this.inputAction = inputAction;
-        this.inputSources = Collections.unmodifiableList(inputSources);
-        this.inputUriScheme = inputUriScheme;
-        this.columns = columns;
-        this.rowsBelowDock = rowsBelowDock;
-        this.animations = animations;
-        this.advancedEffects = advancedEffects;
-        this.shamsiDate = shamsiDate;
-        this.lunarDate = lunarDate;
-        this.lunarUtcOffset = lunarUtcOffset;
-        this.dateBelowClock = dateBelowClock;
-        this.vpnPill = vpnPill;
-        this.locale = locale;
-        this.greetingName = greetingName;
-        this.moduleCards = moduleCards;
-        this.reducedMotion = reducedMotion;
-        this.bootToLiveTv = bootToLiveTv;
-        this.openOnStartChoice = openOnStartChoice;
-        this.dockTitle = dockTitle;
-        this.dockRow = dockRow;
-        this.topMenu = topMenu;
-        this.launcherSettingsButton = launcherSettingsButton;
-        this.reorderButton = reorderButton;
-        this.showNetworkPill = showNetworkPill;
-        this.showInputsPill = showInputsPill;
-        this.iconOnlyButtons = iconOnlyButtons;
-        this.iconOnlyInputs = iconOnlyInputs;
-        this.iconOnlyVpn = iconOnlyVpn;
-        this.backOpensClock = backOpensClock;
-        this.glowSnap = glowSnap;
-        this.settingsKeyClearTask = settingsKeyClearTask;
-        this.libraryButton = libraryButton;
-        this.showLibraryPill = showLibraryPill;
-        this.wifiLabelWidth = wifiLabelWidth;
-        this.alwaysShowNames = alwaysShowNames;
-        this.wallpaperTrueColor = wallpaperTrueColor;
-        this.focusOvershoot = focusOvershoot;
-        this.vpnApp = vpnApp;
-        this.showHomeSettingsShortcut = showHomeSettingsShortcut;
-        this.showStats = showStats;
-        this.gameDay = gameDay;
-        this.appLibrary = appLibrary;
-        this.appLibrarySelection = appLibrarySelection;
-        this.libraryOkOpens = libraryOkOpens;
-        this.uniformTiles = uniformTiles;
-        this.backgroundColor = backgroundColor;
-        this.skyIntensity = skyIntensity;
-        this.settingsKeycodes = settingsKeycodes;
-        this.settingsKeyPanel = settingsKeyPanel;
-        this.restoreKeyServices = restoreKeyServices;
-        this.wallpaperEnabled = wallpaperEnabled;
-        this.wallpaper = wallpaper;
-        this.wallpapers = Collections.unmodifiableList(wallpapers);
-        this.wallpaperRotationMinutes = wallpaperRotationMinutes;
-        this.wallpaperDim = wallpaperDim;
-        this.dockOpacity = dockOpacity;
-        this.wallpaperOrder = wallpaperOrder;
-        this.overlayApplied = overlayApplied;
-        this.festival = festival;
-        this.raceCalendar = Collections.unmodifiableList(raceCalendar);
-        this.cinematicHome = cinematicHome;
-        this.ambientGlow = ambientGlow;
-        this.appGlow = appGlow;
-        this.fadeRows = fadeRows;
-        this.homeIdleClockMinutes = homeIdleClockMinutes;
-        this.dockGlass = dockGlass;
-        this.dockEvenPadding = dockEvenPadding;
-        this.dockBand = dockBand;
-        this.cinematicDots = cinematicDots;
-        this.cinematicWhiteFocus = cinematicWhiteFocus;
-        this.wifiStatusColor = wifiStatusColor;
-        this.cinematicArt = cinematicArt;
-        this.cinematicScrim = cinematicScrim;
-        this.wallpaperMoods = wallpaperMoods;
-        this.gamepadPassthrough = gamepadPassthrough;
-        this.consumeVolumeKeys = consumeVolumeKeys;
-        this.homeIgnoreChannelKeys = homeIgnoreChannelKeys;
-        this.powerOnHome = powerOnHome;
-        this.homeLongPressHome = homeLongPressHome;
-        this.powerOnHomeAlways = powerOnHomeAlways;
-        this.inputsConnectedOnly = inputsConnectedOnly;
-        this.inputsCecStateOnly = inputsCecStateOnly;
-        this.openOnStartNetworkWait = openOnStartNetworkWait;
-        this.openOnStartOnWake = openOnStartOnWake;
-        this.clockFormat = clockFormat;
-        this.wifiStatusWarnings = wifiStatusWarnings;
-        this.topBarApps = Collections.unmodifiableList(topBarApps);
-        this.showGreeting = showGreeting;
-        this.headerWhite = headerWhite;
-        this.clockWallpaper = clockWallpaper;
-        this.clockWallpaperDim = clockWallpaperDim;
-        this.clockGlow = clockGlow;
-        this.singleRow = singleRow;
-        this.dockBandAll = dockBandAll;
-        this.glowStyle = glowStyle(glowStyle);
-        this.wallpaperCaptions = wallpaperCaptions;
-        this.glassStyle = glassStyle(glassStyle);
-    }
-
     /** A known glow_style, or radial (the default) for anything else. */
     static String glowStyle(String value) {
         return value != null && GLOW_HORIZON.equalsIgnoreCase(value.trim()) ? GLOW_HORIZON : GLOW_RADIAL;
@@ -454,6 +318,10 @@ final class Config {
     }
 
     static Config load(Context ctx) {
+        return new Config(ctx);
+    }
+
+    private Config(Context ctx) {
         Resources res = ctx.getResources();
         List<String> dock = new ArrayList<>(Arrays.asList(res.getStringArray(R.array.dock_apps)));
         boolean fillDock = res.getBoolean(R.bool.fill_dock);
@@ -732,56 +600,156 @@ final class Config {
         boolean channelHome = json != null && bool(json, "channel_home", false);
         if (channelHome) {
             // The channels Home is one plain grid on a flat light background: the options that draw a dock, a
-            // title, a glow or a dark backdrop have nothing to draw on.
+            // title, a glow, a footer pill or a dark backdrop have nothing to draw on.
             dockRow = false;
             singleRow = false;
             dockTitle = false;
             cinematic = false;
             ambientGlow = false;
             appGlow = false;
+            fadeRows = false;
+            showLibraryPill = false;
             skyIntensity = 0;
+            wallpaper = null;
+            wallpapers.clear();
+            festival = Festival.NONE;
             glassStyle = GLASS_RIM;
             if (!json.has("columns")) columns = 4;
             if (!json.has("rows_below_dock")) rowsBelow = 2;
             if (!json.has("background_color")) background = 0xFFEEF1F8;
         }
-        Config loaded = new Config(dock, fillDock, hidden, libraryApps, libraryExcludedApps, liveTv, liveTvAction, liveTvInputId, packageMap(launchActions), packageMap(appLabels),
-                packageMap(appBanners), panelService, panelAction, panelExtra, coocaaSources, inputAction, inputSources, inputUriScheme, Math.max(1, columns),
-                Math.max(0, rowsBelow), animations, advancedEffects, shamsi, greetingName, moduleCards, reducedMotion, bootToLiveTv,
-                openOnStartChoice, dockTitle, dockRow, topMenu, launcherSettingsButton, reorderButton, showNetworkPill, showInputsPill,
-                iconOnlyButtons, iconOnlyInputs, libraryButton, showLibraryPill, wifiLabelWidth, alwaysShowNames, wallpaperTrueColor, focusOvershoot,
-                vpn, homeSettings, showStats, gameDay, library, librarySelection, libraryOkOpens, uniformTiles, background,
-                Math.max(0, Math.min(100, skyIntensity)), settingsKeycodes, settingsKeyPanel, restoreKeyServices, wallpaperEnabled, wallpaper,
-                wallpapers, rotationMinutes, wallpaperDim, dockOpacity, wallpaperOrder, applied, festival, inputKeycodes, appKeys, stockHomeRedirect,
-                json == null ? Collections.emptyList() : raceCalendar(json), cinematic, ambientGlow, appGlow, fadeRows,
-                Math.max(0, idleClockMinutes), keyFilter, dockGlass, glowStyle, wallpaperCaptions, handleViewInputs, tileMenu, dockEvenPadding,
-                dockBand, cinematicDots, cinematicWhiteFocus, wifiStatusColor, cinematicScrim, cinematicArt, wallpaperMoods, gamepadPassthrough,
-                consumeVolumeKeys, homeIgnoreChannelKeys, powerOnHome, homeLongPressHome, wifiStatusWarnings, topBarApps, showGreeting, headerWhite, clockWallpaper,
-                Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
-                dateBelowClock, vpnPill, locale, powerOnHomeAlways, inputsConnectedOnly, inputsCecStateOnly,
-                Math.max(0, Math.min(600, openOnStartNetworkWait)), openOnStartOnWake, iconOnlyVpn, clockFormat, backOpensClock, glowSnap,
-                settingsKeyClearTask);
+        this.handleViewInputs = handleViewInputs;
+        this.tileMenu = tileMenu;
+        this.inputKeycodes = inputKeycodes;
+        this.appKeys = Collections.unmodifiableList(appKeys);
+        this.keyFilter = keyFilter;
+        this.stockHomeRedirect = stockHomeRedirect;
+        this.dockApps = Collections.unmodifiableList(dock);
+        this.fillDock = fillDock;
+        this.hiddenApps = Collections.unmodifiableList(hidden);
+        this.libraryApps = Collections.unmodifiableList(libraryApps);
+        this.libraryExcludedApps = Collections.unmodifiableList(libraryExcludedApps);
+        this.liveTvPackage = liveTv;
+        this.liveTvAction = liveTvAction;
+        this.liveTvInputId = liveTvInputId;
+        this.launchActions = Collections.unmodifiableMap(packageMap(launchActions));
+        this.appLabels = Collections.unmodifiableMap(packageMap(appLabels));
+        this.appBanners = Collections.unmodifiableMap(packageMap(appBanners));
+        this.sourcePanelService = panelService;
+        this.sourcePanelAction = panelAction;
+        this.sourcePanelExtra = panelExtra;
+        this.coocaaSources = coocaaSources;
+        this.inputAction = inputAction;
+        this.inputSources = Collections.unmodifiableList(inputSources);
+        this.inputUriScheme = inputUriScheme;
+        this.columns = Math.max(1, columns);
+        this.rowsBelowDock = Math.max(0, rowsBelow);
+        this.animations = animations;
+        this.advancedEffects = advancedEffects;
+        this.shamsiDate = shamsi;
+        this.lunarDate = lunar;
+        this.lunarUtcOffset = lunarOffset;
+        this.dateBelowClock = dateBelowClock;
+        this.vpnPill = vpnPill;
+        this.locale = locale;
+        this.greetingName = greetingName;
+        this.moduleCards = moduleCards;
+        this.reducedMotion = reducedMotion;
+        this.bootToLiveTv = bootToLiveTv;
+        this.openOnStartChoice = openOnStartChoice;
+        this.dockTitle = dockTitle;
+        this.dockRow = dockRow;
+        this.topMenu = topMenu;
+        this.launcherSettingsButton = launcherSettingsButton;
+        this.reorderButton = reorderButton;
+        this.showNetworkPill = showNetworkPill;
+        this.showInputsPill = showInputsPill;
+        this.iconOnlyButtons = iconOnlyButtons;
+        this.iconOnlyInputs = iconOnlyInputs;
+        this.iconOnlyVpn = iconOnlyVpn;
+        this.backOpensClock = backOpensClock;
+        this.glowSnap = glowSnap;
+        this.settingsKeyClearTask = settingsKeyClearTask;
+        this.libraryButton = libraryButton;
+        this.showLibraryPill = showLibraryPill;
+        this.wifiLabelWidth = wifiLabelWidth;
+        this.alwaysShowNames = alwaysShowNames;
+        this.wallpaperTrueColor = wallpaperTrueColor;
+        this.focusOvershoot = focusOvershoot;
+        this.vpnApp = vpn;
+        this.showHomeSettingsShortcut = homeSettings;
+        this.showStats = showStats;
+        this.gameDay = gameDay;
+        this.appLibrary = library;
+        this.appLibrarySelection = librarySelection;
+        this.libraryOkOpens = libraryOkOpens;
+        this.uniformTiles = uniformTiles;
+        this.backgroundColor = background;
+        this.skyIntensity = Math.max(0, Math.min(100, skyIntensity));
+        this.settingsKeycodes = settingsKeycodes;
+        this.settingsKeyPanel = settingsKeyPanel;
+        this.restoreKeyServices = restoreKeyServices;
+        this.wallpaperEnabled = wallpaperEnabled;
+        this.wallpaper = wallpaper;
+        this.wallpapers = Collections.unmodifiableList(wallpapers);
+        this.wallpaperRotationMinutes = rotationMinutes;
+        this.wallpaperDim = wallpaperDim;
+        this.dockOpacity = dockOpacity;
+        this.wallpaperOrder = wallpaperOrder;
+        this.overlayApplied = applied;
+        this.festival = festival;
+        this.raceCalendar = Collections.unmodifiableList(json == null ? Collections.emptyList() : raceCalendar(json));
+        this.cinematicHome = cinematic;
+        this.ambientGlow = ambientGlow;
+        this.appGlow = appGlow;
+        this.fadeRows = fadeRows;
+        this.homeIdleClockMinutes = Math.max(0, idleClockMinutes);
+        this.dockGlass = dockGlass;
+        this.dockEvenPadding = dockEvenPadding;
+        this.dockBand = dockBand;
+        this.cinematicDots = cinematicDots;
+        this.cinematicWhiteFocus = cinematicWhiteFocus;
+        this.wifiStatusColor = wifiStatusColor;
+        this.cinematicArt = cinematicArt;
+        this.cinematicScrim = cinematicScrim;
+        this.wallpaperMoods = wallpaperMoods;
+        this.gamepadPassthrough = gamepadPassthrough;
+        this.consumeVolumeKeys = consumeVolumeKeys;
+        this.homeIgnoreChannelKeys = homeIgnoreChannelKeys;
+        this.powerOnHome = powerOnHome;
+        this.homeLongPressHome = homeLongPressHome;
+        this.powerOnHomeAlways = powerOnHomeAlways;
+        this.inputsConnectedOnly = inputsConnectedOnly;
+        this.inputsCecStateOnly = inputsCecStateOnly;
+        this.openOnStartNetworkWait = Math.max(0, Math.min(600, openOnStartNetworkWait));
+        this.openOnStartOnWake = openOnStartOnWake;
+        this.clockFormat = clockFormat;
+        this.wifiStatusWarnings = wifiStatusWarnings;
+        this.topBarApps = Collections.unmodifiableList(topBarApps);
+        this.showGreeting = showGreeting;
+        this.headerWhite = headerWhite;
+        this.clockWallpaper = clockWallpaper;
+        this.clockWallpaperDim = Math.max(0, Math.min(90, clockWallpaperDim));
+        this.clockGlow = clockGlow;
+        this.singleRow = singleRow && dockRow;
+        this.dockBandAll = dockBandAll;
+        this.glowStyle = glowStyle(glowStyle);
+        this.wallpaperCaptions = wallpaperCaptions;
+        this.glassStyle = glassStyle(glassStyle);
         if (channelHome) {
-            loaded.channelHome = true;
-            loaded.profileName = string(json, "profile_name", "").trim();
-            loaded.storePackage = string(json, "store_package", loaded.storePackage).trim();
-            loaded.channelAccent = color(string(json, "channel_accent", ""), loaded.channelAccent);
-            loaded.channelDateFormat = string(json, "channel_date_format", "").trim();
+            this.channelHome = true;
+            this.profileName = string(json, "profile_name", "");
+            this.storePackage = string(json, "store_package", this.storePackage);
+            this.channelAccent = color(json, "channel_accent", this.channelAccent);
+            this.channelDateFormat = string(json, "channel_date_format", "");
             for (String name : new String[]{"profile.jpg", "profile.png"}) {
                 File picture = dir == null ? null : new File(dir, name);
                 if (picture != null && picture.isFile()) {
-                    loaded.profilePicture = picture;
+                    this.profilePicture = picture;
                     break;
                 }
             }
         }
-        return loaded;
-    }
-
-    /** {@code #RRGGBB} as an opaque colour, or the fallback when the text is not one. */
-    private static int color(String text, int fallback) {
-        if (text == null || !text.matches("#[0-9a-fA-F]{6}")) return fallback;
-        return 0xFF000000 | Integer.parseInt(text.substring(1), 16);
     }
 
     /**

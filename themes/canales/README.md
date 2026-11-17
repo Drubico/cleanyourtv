@@ -11,7 +11,7 @@ bottom of the screen.
 - Right: the network (Wi-Fi with its signal in bars, or Ethernet) and Settings.
 - Apps that ship only a phone icon fill their tile in the icon's own colour.
 
-Down from the last row reaches the bar; Up from the bar goes back to the tile you left.
+Down from the last row lands on the button beneath that column; Up from the bar goes back to the tile you left.
 
 ```bash
 TV_HOST=<tv ip> tools/theme.sh themes/canales

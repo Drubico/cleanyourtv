@@ -463,7 +463,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             View label = v.findViewById(R.id.label);
             label.setPadding(label.getPaddingLeft(), label.getPaddingTop(), label.getPaddingRight(), Math.round(4f * density));
         }
-        return new Holder(v, listener, animations, advancedEffects, reducedMotion, restNameAlpha, focusOvershoot);
+        return new Holder(v);
     }
 
     @Override
@@ -520,21 +520,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             h.label.setText(e.label);
             h.label.setVisibility(uniformTiles || channelHome ? View.GONE : View.VISIBLE);
         }
-        h.card.setOnClickListener(v -> launch(e));
-        h.card.setOnLongClickListener(v -> {
-            if (tileMenu) {
-                int pos = h.getBindingAdapterPosition();
-                if (pos != RecyclerView.NO_POSITION) listener.onTileLongPress(pos, v);
-                return true;
-            }
-            Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + e.pkg));
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            try {
-                ctx.startActivity(i);
-            } catch (ActivityNotFoundException ignored) {
-            }
-            return true;
-        });
+        h.card.setOnClickListener(h);
+        h.card.setOnLongClickListener(h);
     }
 
     /** Opens the tile's activity by explicit component, with no extras: a card can name nothing else. */
@@ -913,7 +900,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         return 16f * density * Math.min(1f, tileWidthPx / (DESIGN_W_DP * density));
     }
 
-    static final class Holder extends RecyclerView.ViewHolder {
+    final class Holder extends RecyclerView.ViewHolder
+            implements View.OnKeyListener, View.OnFocusChangeListener, View.OnClickListener, View.OnLongClickListener {
         final View card;
         /** item_app.xml's tile_bg: the dark card behind an icon tile, or behind a banner that has transparent parts. */
         final Drawable cardBackground;
@@ -921,17 +909,11 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         final ImageView icon;
         final TextView label;
         final TextView name;
-        final boolean animations;
-        final boolean advancedEffects;
-        final boolean reducedMotion;
-        /** Alpha of the name while the tile is not focused (always_show_names). */
-        final float restNameAlpha;
-        final boolean overshoot;
+        final float density;
         /** A dock tile: it grows in place without advanced_effects' lift, which reads as off-centre in the band (#2135). */
         boolean inDock;
 
-        Holder(View v, TileListener listener, boolean animations, boolean advancedEffects,
-               boolean reducedMotion, float restNameAlpha, boolean overshoot) {
+        Holder(View v) {
             super(v);
             card = v.findViewById(R.id.card);
             cardBackground = card.getBackground();
@@ -939,13 +921,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             icon = v.findViewById(R.id.icon);
             label = v.findViewById(R.id.label);
             name = v.findViewById(R.id.name);
-            this.animations = animations;
-            this.advancedEffects = advancedEffects;
-            this.reducedMotion = reducedMotion;
-            this.restNameAlpha = restNameAlpha;
-            this.overshoot = overshoot;
-
-            final float density = v.getResources().getDisplayMetrics().density;
+            density = v.getResources().getDisplayMetrics().density;
             card.setOutlineProvider(new ViewOutlineProvider() {
                 @Override
                 public void getOutline(View view, Outline outline) {
@@ -954,65 +930,87 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 }
             });
             card.setClipToOutline(true);
+            card.setOnKeyListener(this);
+            card.setOnFocusChangeListener(this);
+        }
 
-            card.setOnKeyListener((view, keyCode, event) -> {
-                if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
-                if (keyCode != KeyEvent.KEYCODE_DPAD_UP && keyCode != KeyEvent.KEYCODE_DPAD_DOWN
-                        && keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) return false;
-                int pos = getBindingAdapterPosition();
-                return listener != null && pos != RecyclerView.NO_POSITION && listener.onTileVerticalKey(pos, keyCode);
-            });
+        @Override
+        public void onClick(View v) {
+            int pos = getBindingAdapterPosition();
+            if (pos >= 0 && pos < items.size()) launch(items.get(pos));
+        }
 
-            card.setOnFocusChangeListener((view, focused) -> {
-                view.animate().cancel();
-                banner.animate().cancel();
-                name.animate().cancel();
-                float scale = !animations ? 1f : advancedEffects ? 1.12f : 1.10f;
-                float s = focused ? scale : 1f;
-                if (!animations) {
-                    view.setScaleX(1f);
-                    view.setScaleY(1f);
-                    view.setTranslationY(0f);
-                    view.setTranslationZ(0f);
-                    banner.setScaleX(1f);
-                    banner.setScaleY(1f);
-                    name.setAlpha(focused ? 1f : restNameAlpha);
-                    name.setTranslationY(0f);
-                } else if (reducedMotion) {
-                    // A short zoom with no hardware layer: building a layer for so short an animation costs more
-                    // frames than it saves. The name just appears instead of fading.
-                    view.animate().scaleX(s).scaleY(s)
-                            .translationY(focused && advancedEffects && !inDock ? -4f * density : 0f)
-                            .translationZ(focused && advancedEffects ? 8f * density : 0f)
-                            .setDuration(focused ? Motion.REDUCED_MS : 60)
-                            .setInterpolator(new DecelerateInterpolator())
-                            .start();
-                    name.setAlpha(focused ? 1f : restNameAlpha);
-                    // Same place as the full motion's slide ends: the layout's -6dp is only its starting point, and
-                    // left there the name overlaps the zoomed tile.
-                    // Only on focus: snapping it back to -6dp while it fades out would jump it up over the tile.
-                    if (focused) name.setTranslationY(density * 4f);
-                } else {
-                    view.animate().scaleX(s).scaleY(s)
-                            .translationY(focused && advancedEffects && !inDock ? -4f * density : 0f)
-                            .translationZ(focused && advancedEffects ? 8f * density : 0f)
-                            .setDuration(advancedEffects ? (focused ? 220 : 170) : (focused ? 260 : 180))
-                            .setInterpolator(focused && !overshoot ? new DecelerateInterpolator(1.5f)
-                                    : new OvershootInterpolator(focused ? (advancedEffects ? 0.7f : 1.6f) : 0f))
-                            .withLayer().start();
-                    if (advancedEffects) {
-                        banner.animate().scaleX(focused ? 1.035f : 1f).scaleY(focused ? 1.035f : 1f)
-                                .setDuration(280).start();
-                    }
-                    name.animate().alpha(focused ? 1f : restNameAlpha)
-                            .translationY(focused ? density * 4f : -density * 6f)
-                            .setDuration(220).start();
+        @Override
+        public boolean onLongClick(View v) {
+            int pos = getBindingAdapterPosition();
+            if (pos < 0 || pos >= items.size()) return true;
+            if (tileMenu) {
+                listener.onTileLongPress(pos, v);
+                return true;
+            }
+            Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + items.get(pos).pkg));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                ctx.startActivity(i);
+            } catch (ActivityNotFoundException ignored) {
+            }
+            return true;
+        }
+
+        @Override
+        public boolean onKey(View view, int keyCode, KeyEvent event) {
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+            if (keyCode != KeyEvent.KEYCODE_DPAD_UP && keyCode != KeyEvent.KEYCODE_DPAD_DOWN
+                    && keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+            int pos = getBindingAdapterPosition();
+            return listener != null && pos != RecyclerView.NO_POSITION && listener.onTileVerticalKey(pos, keyCode);
+        }
+
+        @Override
+        public void onFocusChange(View view, boolean focused) {
+            view.animate().cancel();
+            banner.animate().cancel();
+            name.animate().cancel();
+            float scale = !animations ? 1f : advancedEffects ? 1.12f : 1.10f;
+            float s = focused ? scale : 1f;
+            if (!animations) {
+                view.setScaleX(1f);
+                view.setScaleY(1f);
+                view.setTranslationY(0f);
+                view.setTranslationZ(0f);
+                banner.setScaleX(1f);
+                banner.setScaleY(1f);
+                name.setAlpha(focused ? 1f : restNameAlpha);
+                name.setTranslationY(0f);
+            } else if (reducedMotion) {
+                view.animate().scaleX(s).scaleY(s)
+                        .translationY(focused && advancedEffects && !inDock ? -4f * density : 0f)
+                        .translationZ(focused && advancedEffects ? 8f * density : 0f)
+                        .setDuration(focused ? Motion.REDUCED_MS : 60)
+                        .setInterpolator(new DecelerateInterpolator())
+                        .start();
+                name.setAlpha(focused ? 1f : restNameAlpha);
+                if (focused) name.setTranslationY(density * 4f);
+            } else {
+                view.animate().scaleX(s).scaleY(s)
+                        .translationY(focused && advancedEffects && !inDock ? -4f * density : 0f)
+                        .translationZ(focused && advancedEffects ? 8f * density : 0f)
+                        .setDuration(advancedEffects ? (focused ? 220 : 170) : (focused ? 260 : 180))
+                        .setInterpolator(focused && !focusOvershoot ? new DecelerateInterpolator(1.5f)
+                                : new OvershootInterpolator(focused ? (advancedEffects ? 0.7f : 1.6f) : 0f))
+                        .withLayer().start();
+                if (advancedEffects) {
+                    banner.animate().scaleX(focused ? 1.035f : 1f).scaleY(focused ? 1.035f : 1f)
+                            .setDuration(280).start();
                 }
-                int pos = getBindingAdapterPosition();
-                if (focused && listener != null && pos != RecyclerView.NO_POSITION) {
-                    listener.onTileFocused(pos, view);
-                }
-            });
+                name.animate().alpha(focused ? 1f : restNameAlpha)
+                        .translationY(focused ? density * 4f : -density * 6f)
+                        .setDuration(220).start();
+            }
+            int pos = getBindingAdapterPosition();
+            if (focused && listener != null && pos != RecyclerView.NO_POSITION) {
+                listener.onTileFocused(pos, view);
+            }
         }
     }
 }

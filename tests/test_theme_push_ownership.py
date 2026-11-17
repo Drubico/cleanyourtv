@@ -437,6 +437,24 @@ class ThemePushTest(unittest.TestCase):
         self.assertIn("content delete --uri $uri/wallpapers", clear)
         self.assertNotIn("captions", clear, "the captions file is dropped on its own line, as in theme.sh")
 
+    def test_profile_picture_is_pushed_and_cleared_on_reset(self):
+        (self.theme / "profile.jpg").write_bytes(b"\xff\xd8profile-jpg")
+        pushed = self.run_theme(str(self.theme))
+        self.assertEqual(pushed.returncode, 0, pushed.stdout + pushed.stderr)
+        self.assertEqual((self.device / "profile.jpg").read_bytes(), b"\xff\xd8profile-jpg")
+        self.assertIn(["write", "--uri", "content://com.gathin.tvhome.theme/profile.jpg"], self.provider_calls())
+
+        (self.theme / "profile.jpg").unlink()
+        (self.theme / "profile.png").write_bytes(b"\x89PNGprofile")
+        swapped = self.run_theme(str(self.theme))
+        self.assertEqual(swapped.returncode, 0, swapped.stdout + swapped.stderr)
+        self.assertFalse((self.device / "profile.jpg").exists(), "pushing profile.png removes stale profile.jpg")
+        self.assertEqual((self.device / "profile.png").read_bytes(), b"\x89PNGprofile")
+
+        reset = self.run_theme("--reset")
+        self.assertEqual(reset.returncode, 0, reset.stdout + reset.stderr)
+        self.assertFalse((self.device / "profile.png").exists(), "--reset removes profile.png")
+
 
 if __name__ == "__main__":
     unittest.main()

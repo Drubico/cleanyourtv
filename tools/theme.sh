@@ -152,7 +152,7 @@ put_on() {   # put $1, after the optional command $2 in the same shell call
   fi
 }
 if [ "${1:-}" = --reset ]; then
-  tv "mkdir -p $DIR 2>/dev/null; $(del config.json); $(del wallpaper.jpg); $(del wallpapers/captions.txt); $CLEAR_WALLPAPERS" >/dev/null
+  tv "mkdir -p $DIR 2>/dev/null; $(del config.json); $(del wallpaper.jpg); $(del profile.jpg); $(del profile.png); $(del wallpapers/captions.txt); $CLEAR_WALLPAPERS" >/dev/null
   put_on theme_revision "printf '%s' '$REVISION' > $TMP-theme_revision"
   restart_home "the theme was removed"
   echo reset
@@ -228,6 +228,18 @@ if [ -f "$THEME/wallpapers/captions.txt" ]; then
   put_on wallpapers/captions.txt
 else
   tv "$(del wallpapers/captions.txt)" >/dev/null || stopped "removing wallpapers/captions.txt"
+fi
+# The profile picture (channel_home); pushing a theme with one or none clears the other so a stale picture never stays.
+if [ -f "$THEME/profile.jpg" ]; then
+  tv "$(del profile.png)" >/dev/null || stopped "removing profile.png"
+  "$PY" -I b64push.py "$THEME/profile.jpg" "$TMP-profile.jpg" || stopped profile.jpg
+  put_on profile.jpg
+elif [ -f "$THEME/profile.png" ]; then
+  tv "$(del profile.jpg)" >/dev/null || stopped "removing profile.jpg"
+  "$PY" -I b64push.py "$THEME/profile.png" "$TMP-profile.png" || stopped profile.png
+  put_on profile.png
+else
+  tv "$(del profile.jpg); $(del profile.png)" >/dev/null || stopped "removing profile picture"
 fi
 put_on theme_revision "printf '%s' '$REVISION' > $TMP-theme_revision"
 restart_home "the theme was pushed"

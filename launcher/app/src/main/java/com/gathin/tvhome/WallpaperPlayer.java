@@ -270,29 +270,32 @@ final class WallpaperPlayer {
     }
 
     private Bitmap decode(File file) {
+        return decode(file, this.width, this.height, bitmapConfig, dimColor, true);
+    }
+
+    static Bitmap decode(File file, int screenW, int screenH, Bitmap.Config config, int dim, boolean toHardware) {
         try {
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inJustDecodeBounds = true;
             BitmapFactory.decodeFile(file.getPath(), options);
             int width = options.outWidth, height = options.outHeight;
             if (width <= 0 || height <= 0) return null;
-            int sample = WallpaperSize.sampleSize(width, height, this.width, this.height);
+            int sample = WallpaperSize.sampleSize(width, height, screenW, screenH);
             if (!WallpaperSize.accepted(width / sample, height / sample)) return null;
             options.inJustDecodeBounds = false;
             options.inSampleSize = sample;
-            int[] scale = WallpaperSize.coverScale(width / sample, height / sample, this.width, this.height);
+            int[] scale = WallpaperSize.coverScale(width / sample, height / sample, screenW, screenH);
             if (scale != null) {
                 options.inScaled = true;
                 options.inDensity = scale[0];
                 options.inTargetDensity = scale[1];
             }
-            options.inPreferredConfig = bitmapConfig;
-            options.inMutable = dimColor != 0;
+            options.inPreferredConfig = config;
+            options.inMutable = dim != 0;
             Bitmap decoded = BitmapFactory.decodeFile(file.getPath(), options);
             if (decoded == null) return null;
-            if (dimColor != 0) new Canvas(decoded).drawColor(dimColor);
-            // One copy in GPU memory instead of a software bitmap plus its texture; the decode stays off the UI
-            // thread for rotations, and Home's return no longer uploads 4-8 MB to the GPU.
+            if (dim != 0) new Canvas(decoded).drawColor(dim);
+            if (!toHardware) return decoded;
             Bitmap gpu = decoded.copy(Bitmap.Config.HARDWARE, false);
             if (gpu == null) return decoded;
             decoded.recycle();
