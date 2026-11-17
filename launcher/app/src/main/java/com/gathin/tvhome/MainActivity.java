@@ -763,13 +763,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
             // Cold start or column count > 4: the first focus can run before the grid has its final width or
             // padding, leaving the glass at the XML design size until a key is pressed.
-            if (channelRows > 0) {
-                // One page of rows and nothing of the next: the room the plain grid keeps under its last row
-                // would show the top of the following page above the bar.
-                int pageBottom = want + channelRows * AppAdapter.itemHeightPx(AppAdapter.tileHeightPx(tileW), false, density)
-                        + (int) (2 * density);
-                ((View) grid.getParent()).setClipBounds(new Rect(0, 0, r - l, pageBottom));
-            }
             grid.post(this::refitGlass);
         });
 

@@ -11,6 +11,7 @@ import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
@@ -562,6 +563,15 @@ final class ChannelHome {
                 return;
             }
             int cellW = cell.getWidth(), cellH = cell.getHeight();
+            // One page of rows and nothing of the next, measured on a real cell: the room the plain grid keeps
+            // under its last row would show the top of the following page above the bar. Set again only when
+            // it changes, since setting it redraws the grid and lands back here.
+            View host = (View) parent.getParent();
+            int pageBottom = parent.getTop() + parent.getPaddingTop() + rows * cellH + Math.round(2 * density);
+            Rect clip = host.getClipBounds();
+            if (clip == null || clip.bottom != pageBottom || clip.right != host.getWidth()) {
+                host.setClipBounds(new Rect(0, 0, host.getWidth(), pageBottom));
+            }
             int offset = parent.getPaddingTop() + (position / columns) * cellH - cell.getTop();
             dots.show(pages, Math.round(offset / (float) (rows * cellH)));
             if (count >= total) return;
