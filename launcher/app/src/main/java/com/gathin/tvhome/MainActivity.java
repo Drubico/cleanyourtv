@@ -432,6 +432,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         public void onReceive(Context context, Intent intent) {
             updateClockVisibility();
             clockRefresh.start();   // the wall clock was set: line the redraw up with the new minute
+            if (channelHome != null) channelHome.updateDate();
         }
     };
     /** Keeps the Home clocks moving on Android before 12 when the firmware stops ACTION_TIME_TICK (see ClockRefresh). */
@@ -443,7 +444,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             updatePanel();
             // The pill follows the network callbacks and each return to Home; only the festive light follows the
             // signal level, so only it needs this minute's binder calls (about 7 ms on the UI thread).
-            if (festive) updateWifiLabel();
+            if (festive || channelHome != null) updateWifiLabel();
+            if (channelHome != null) channelHome.updateDate();
             sky.update();
             wallpaperPlayer.update();
             handler.postDelayed(this, MINUTE_MS);
@@ -477,6 +479,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         settingsKeyPanel = cfg.settingsKeyPanel;
         settingsKeyClearTask = cfg.settingsKeyClearTask;
         COLUMNS = cfg.columns;
+        channelRows = cfg.channelHome ? cfg.rowsBelowDock + 1 : 0;
         animations = cfg.animations;
         advancedEffects = cfg.animations && cfg.advancedEffects;
         reducedMotion = cfg.reducedMotion;
@@ -654,6 +657,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     else parent.smoothScrollBy(dx, 0);
                     return true;
                 }
+                if (channelRows > 0) {
+                    // channel_home turns pages: the focused tile's page of rows is parked at the top, so no row
+                    // is ever cut in half by the bar. Every row is one item high, which makes the offset exact.
+                    int pitch = child.getHeight();
+                    int row = getPosition(child) / COLUMNS;
+                    int offset = getPaddingTop() + row * pitch - child.getTop();
+                    int pageDy = row / channelRows * channelRows * pitch - offset;
+                    if (pageDy == 0) return false;
+                    if (immediate || reducedMotion || !animations) parent.scrollBy(0, pageDy);
+                    else parent.smoothScrollBy(0, pageDy);
+                    return true;
+                }
                 if (dockRow && getPosition(child) < COLUMNS) return false;
                 int top = child.getTop() + rect.top;
                 int bottom = top + rect.height();
@@ -748,6 +763,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
             // Cold start or column count > 4: the first focus can run before the grid has its final width or
             // padding, leaving the glass at the XML design size until a key is pressed.
+            if (channelRows > 0) {
+                // One page of rows and nothing of the next: the room the plain grid keeps under its last row
+                // would show the top of the following page above the bar.
+                int pageBottom = want + channelRows * AppAdapter.itemHeightPx(AppAdapter.tileHeightPx(tileW), false, density)
+                        + (int) (2 * density);
+                ((View) grid.getParent()).setClipBounds(new Rect(0, 0, r - l, pageBottom));
+            }
             grid.post(this::refitGlass);
         });
 
@@ -931,6 +953,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         }
         if (festive) applyFestiveSkin((TextView) btnInputs, (TextView) btnSettings);
+        if (cfg.channelHome) setUpChannelHome(cfg, btnSettings);
 
         // Hide the glass when focus leaves the tiles.
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
@@ -972,6 +995,31 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (savedInstanceState == null && !openLauncherSettingsIfAsked(getIntent()) && !openLibraryIfAsked(getIntent())) {
             openInputsIfAsked(getIntent());
         }
+    }
+
+    /**
+     * channel_home: the header leaves the screen (its views stay, so the code that updates them is untouched), the
+     * content narrows around the grid and stops above the bar, and ChannelHome adds the bar itself.
+     */
+    private void setUpChannelHome(Config cfg, View btnSettings) {
+        View header = (View) findViewById(R.id.leftBlock).getParent();
+        header.setVisibility(View.GONE);
+        racePanel.setVisibility(View.GONE);
+        View content = (View) header.getParent();
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        int side = ChannelHome.sidePaddingPx(dm.widthPixels, dm.heightPixels, COLUMNS, cfg.rowsBelowDock, density);
+        content.setPadding(side, Math.round(ChannelHome.CONTENT_TOP_DP * density), side,
+                Math.round(ChannelHome.CONTENT_BOTTOM_DP * density));
+        glass.setSolidRim(cfg.channelAccent);
+        // Room to park the last page at the top even when it has a single row.
+        grid.setPadding(grid.getPaddingLeft(), grid.getPaddingTop(), grid.getPaddingRight(), dm.heightPixels);
+        channelHome = ChannelHome.install(this, cfg, root, grid, adapter, clockFormat, side, new ChannelHome.Host() {
+            @Override public void focusLastTile() { focusTile(lastFocused); }
+            @Override public void openIntent(Intent intent) { open(intent); }
+            @Override public void openSettings() { btnSettings.performClick(); }
+            @Override public void openSettingsMenu() { btnSettings.performLongClick(); }
+            @Override public void openNetwork() { openNetworkPill(); }
+        });
     }
 
     /**
@@ -1419,6 +1467,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /** Blue the glass turns while reorder mode is on. */
     private static final int REORDER_ACCENT = 0xFF6EC1FF;
+    /** channel_home: the bottom bar and its buttons, or null on every other Home. */
+    private ChannelHome channelHome;
+    /** channel_home: the rows the screen shows at once; the grid scrolls by that many, a page at a time. 0 elsewhere. */
+    private int channelRows;
 
     /**
      * Reorder mode (top-bar button). While it is on, every key comes here first:
@@ -1837,6 +1889,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             glass.setLayoutParams(lp);
             // GlassView draws its slab inset by pad, i.e. exactly over the zoomed tile: same corners as the tile.
             glass.setRadius(AppAdapter.cornerRadius(card.getWidth(), density) * scale);
+        } else if (channelHome != null && (glass.getWidth() != (int) w || glass.getHeight() != (int) h)) {
+            // channel_home: a size set while the grid was laying out can be dropped, and the glass stayed at
+            // its 10dp start; the channels Home has no other relayout to pick it up, so ask for one.
+            glass.post(glass::requestLayout);
         }
         glassCardW = card.getWidth();
         glassCardRect.set(r);
@@ -2463,12 +2519,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     rtlAppGrid, keyCode == KeyEvent.KEYCODE_DPAD_LEFT);
         }
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            if (position < COLUMNS) return false;          // dock row: let focus move to the top bar
+            if (position < COLUMNS) return channelHome != null;   // dock row: let focus move to the top bar (channel_home has none)
             target = position - COLUMNS;
         } else {
             int lastRowStart = ((count - 1) / COLUMNS) * COLUMNS;
             if (position >= lastRowStart) {
                 if (adapter.isLibraryAt(count)) focusLibrary();
+                else if (channelHome != null) channelHome.focusFrom(position % COLUMNS);
                 return true;
             }
             target = Math.min(position + COLUMNS, count - 1);
@@ -2976,6 +3033,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         } catch (Exception ignored) {
         }
         // With a VPN app configured, a VPN that is down matters too: show a red "VPN off" capsule then.
+        if (channelHome != null) {
+            // Online some other way (cellular, USB tethering) reads as a fair signal, as the festive light does.
+            channelHome.showNetwork(online, icon == R.drawable.ic_ethernet, online && flame == 0 ? 3 : flame);
+        }
         boolean vpnDown = !vpn && online && !vpnApp.isEmpty();
         if (vpnPill) updateVpnPill(vpn);
         if ((vpn || vpnDown) && !vpnPill) {

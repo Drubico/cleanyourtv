@@ -29,6 +29,8 @@ public class GlassView extends View {
     /** glass_style rim or halo: no sheen and no fill, only the crisp rim (and, for halo, a lighter outer glow). */
     private boolean flat;
     private boolean halo;
+    /** channel_home's ring colour (setSolidRim), or 0 for the ordinary glass. */
+    private int solidRim;
 
     public GlassView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -46,6 +48,12 @@ public class GlassView extends View {
 
     /** Tints the rim and the outer glow; 0 restores the plain white glass. */
     void setAccent(int argb) {
+        if (solidRim != 0) {
+            // channel_home: the ring keeps its own colour; reorder mode's accent shows as that colour, undiluted.
+            rim.setColor(argb == 0 ? solidRim : 0xFF000000 | argb);
+            invalidate();
+            return;
+        }
         if (argb == 0) {
             glowRgb = 0xFFFFFF;
             glowAlpha = 0x30;
@@ -58,6 +66,19 @@ public class GlassView extends View {
                     b = ((glowRgb & 0xFF) + 255 * 2) / 3;
             rim.setColor(0xE6000000 | (r << 16) | (g << 8) | b);
         }
+        invalidate();
+    }
+
+    /**
+     * channel_home: a solid ring in exactly this colour and nothing else. The glass rim is lifted towards white
+     * so it reads as an edge of light on a dark Home; on the channels Home's light background that is invisible.
+     */
+    void setSolidRim(int argb) {
+        solidRim = argb;
+        flat = true;
+        halo = false;
+        rim.setStrokeWidth(4f * density);
+        rim.setColor(argb);
         invalidate();
     }
 

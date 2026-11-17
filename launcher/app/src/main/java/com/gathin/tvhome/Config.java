@@ -257,6 +257,23 @@ final class Config {
 
     static final String GLOW_RADIAL = "radial", GLOW_HORIZON = "horizon";
     static final String GLASS_DEFAULT = "glass", GLASS_RIM = "rim", GLASS_HALO = "halo";
+
+    /**
+     * channel_home (theme only): a light "channels" Home. One plain grid of four columns and three rows, and a curved
+     * bar along the bottom with the clock and date in the middle, a profile button and the store on the left and
+     * Settings on the right. See ChannelHome. Not final: set by load() after the constructor, false elsewhere.
+     */
+    boolean channelHome;
+    /** channel_home: the name whose initial the profile button shows when the theme ships no profile picture. */
+    String profileName = "";
+    /** channel_home: the theme's profile.jpg or profile.png, or null. */
+    File profilePicture;
+    /** channel_home: the app the store button opens (store_package), the Play Store by default. */
+    String storePackage = "com.android.vending";
+    /** channel_home: the date's java.time pattern (channel_date_format); empty for the language's long date. */
+    String channelDateFormat = "";
+    /** channel_home: the bar's line, the buttons' ring and the focus highlight (channel_accent). */
+    int channelAccent = 0xFF3B82F6;
     /** Show each rotating wallpaper's name from wallpapers/captions.txt (config.xml / theme wallpaper_captions). */
     final boolean wallpaperCaptions;
     /** Answer VIEW_INPUTS with the Inputs menu (handle_view_inputs); see InputsRequestActivity. */
@@ -712,7 +729,23 @@ final class Config {
         Festival festival = json == null ? Festival.NONE : Festival.parse(festivalName(json),
                 string(json, "festival_until", ""), string(json, "greeting", ""), string(json, "accent_color", ""));
 
-        return new Config(dock, fillDock, hidden, libraryApps, libraryExcludedApps, liveTv, liveTvAction, liveTvInputId, packageMap(launchActions), packageMap(appLabels),
+        boolean channelHome = json != null && bool(json, "channel_home", false);
+        if (channelHome) {
+            // The channels Home is one plain grid on a flat light background: the options that draw a dock, a
+            // title, a glow or a dark backdrop have nothing to draw on.
+            dockRow = false;
+            singleRow = false;
+            dockTitle = false;
+            cinematic = false;
+            ambientGlow = false;
+            appGlow = false;
+            skyIntensity = 0;
+            glassStyle = GLASS_RIM;
+            if (!json.has("columns")) columns = 4;
+            if (!json.has("rows_below_dock")) rowsBelow = 2;
+            if (!json.has("background_color")) background = 0xFFEEF1F8;
+        }
+        Config loaded = new Config(dock, fillDock, hidden, libraryApps, libraryExcludedApps, liveTv, liveTvAction, liveTvInputId, packageMap(launchActions), packageMap(appLabels),
                 packageMap(appBanners), panelService, panelAction, panelExtra, coocaaSources, inputAction, inputSources, inputUriScheme, Math.max(1, columns),
                 Math.max(0, rowsBelow), animations, advancedEffects, shamsi, greetingName, moduleCards, reducedMotion, bootToLiveTv,
                 openOnStartChoice, dockTitle, dockRow, topMenu, launcherSettingsButton, reorderButton, showNetworkPill, showInputsPill,
@@ -728,6 +761,27 @@ final class Config {
                 dateBelowClock, vpnPill, locale, powerOnHomeAlways, inputsConnectedOnly, inputsCecStateOnly,
                 Math.max(0, Math.min(600, openOnStartNetworkWait)), openOnStartOnWake, iconOnlyVpn, clockFormat, backOpensClock, glowSnap,
                 settingsKeyClearTask);
+        if (channelHome) {
+            loaded.channelHome = true;
+            loaded.profileName = string(json, "profile_name", "").trim();
+            loaded.storePackage = string(json, "store_package", loaded.storePackage).trim();
+            loaded.channelAccent = color(string(json, "channel_accent", ""), loaded.channelAccent);
+            loaded.channelDateFormat = string(json, "channel_date_format", "").trim();
+            for (String name : new String[]{"profile.jpg", "profile.png"}) {
+                File picture = dir == null ? null : new File(dir, name);
+                if (picture != null && picture.isFile()) {
+                    loaded.profilePicture = picture;
+                    break;
+                }
+            }
+        }
+        return loaded;
+    }
+
+    /** {@code #RRGGBB} as an opaque colour, or the fallback when the text is not one. */
+    private static int color(String text, int fallback) {
+        if (text == null || !text.matches("#[0-9a-fA-F]{6}")) return fallback;
+        return 0xFF000000 | Integer.parseInt(text.substring(1), 16);
     }
 
     /**
