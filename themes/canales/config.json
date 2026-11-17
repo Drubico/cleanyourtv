@@ -1,0 +1,15 @@
+{
+  "channel_home": true,
+  "profile_name": "",
+  "store_package": "com.android.vending",
+  "hidden_apps": [
+    "com.android.vending"
+  ],
+  "columns": 4,
+  "rows_below_dock": 2,
+  "background_color": "#EEF1F8",
+  "wallpaper": false,
+  "show_inputs_pill": false,
+  "live_tv_package": "",
+  "tile_menu": true
+}
