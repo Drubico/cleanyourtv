@@ -449,7 +449,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             // this way too: a phone app with no TV banner fills the card in its own colour instead of a small icon.
             View icon = v.findViewById(R.id.icon);
             FrameLayout.LayoutParams iconLp = (FrameLayout.LayoutParams) icon.getLayoutParams();
-            iconLp.width = iconLp.height = Math.round(h * ICON_SHARE);
+            iconLp.width = iconLp.height = Math.round(h * (channelHome ? CHANNEL_ICON_SHARE : ICON_SHARE));
             iconLp.bottomMargin = 0;
             icon.setLayoutParams(iconLp);
         } else if (h < Math.round(DESIGN_H_DP * density)) {
@@ -703,6 +703,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     /** Share of the tile height the icon takes in uniform_tiles mode (onCreateViewHolder). */
     private static final float ICON_SHARE = 0.62f;
+    /** channel_home: a phone app's icon fills more of its tile, so the mark reads from across the room. */
+    private static final float CHANNEL_ICON_SHARE = 0.80f;
 
     /**
      * The colour covering most of an icon, for a card that should read as that app: a small saturated badge
