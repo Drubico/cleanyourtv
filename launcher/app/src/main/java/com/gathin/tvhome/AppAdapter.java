@@ -80,8 +80,6 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         int ambient;
         /** uniform_tiles card fill, top and bottom colour; null until sampled from the icon. */
         int[] backdrop;
-        /** channel_home: the app's round icon for an icon tile, or null to draw icon. The tile's colours still come from icon. */
-        Drawable round;
 
         Entry(String label, ComponentName component, Drawable banner, Drawable icon) {
             this(APP, label, component, banner, icon, null, 0);
@@ -310,10 +308,11 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             // The icon is only drawn (and sampled for the glow) when there is no banner, so a tile with a
             // banner skips loading and decoding it.
             Drawable icon = banner == null ? ri.loadIcon(pm) : null;
-            Entry entry = card != null ? new Entry(Entry.CARD, label, component, banner, icon, card.caption, card.accent)
-                    : new Entry(label, component, banner, icon);
-            if (channelHome && icon != null) entry.round = roundIcon(pm, ri, icon);
-            fresh.add(entry);
+            if (card != null) {
+                fresh.add(new Entry(Entry.CARD, label, component, banner, icon, card.caption, card.accent));
+            } else {
+                fresh.add(new Entry(label, component, banner, icon));
+            }
         }
         Collections.sort(fresh, (a, b) -> {
             // The owner's own order first; tiles it does not know (new installs) follow by the rule below.
@@ -365,85 +364,6 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         if (name == null || !name.startsWith("banner_")) return null;
         int id = ctx.getResources().getIdentifier(name, "drawable", ctx.getPackageName());
         return id != 0 ? ctx.getDrawable(id) : null;
-    }
-
-    /** Size the round icon is drawn at once: about the largest the tile shows it, zoomed for focus. */
-    private static final int ROUND_ICON_PX = 256;
-
-    /**
-     * channel_home: the round version of an app's icon, as Google TV's launcher shows it. The app's own round icon
-     * when it ships one under the usual name (ic_launcher_round), else the adaptive icon cut to a circle, else null
-     * for a legacy icon that has neither, which then keeps its own shape.
-     */
-    private Drawable roundIcon(PackageManager pm, ResolveInfo ri, Drawable icon) {
-        Drawable round = null;
-        try {
-            Resources res = pm.getResourcesForApplication(ri.activityInfo.applicationInfo);
-            String pkg = ri.activityInfo.packageName;
-            @SuppressWarnings("DiscouragedApi")
-            int id = res.getIdentifier("ic_launcher_round", "mipmap", pkg);
-            if (id == 0) {
-                @SuppressWarnings("DiscouragedApi")
-                int drawableId = res.getIdentifier("ic_launcher_round", "drawable", pkg);
-                id = drawableId;
-            }
-            int density = Math.max(DisplayMetrics.DENSITY_XHIGH, ctx.getResources().getDisplayMetrics().densityDpi);
-            if (id != 0) round = res.getDrawableForDensity(id, density, null);
-        } catch (PackageManager.NameNotFoundException | Resources.NotFoundException ignored) {
-            // no round icon of its own: the adaptive one below, or none
-        }
-        if (round == null) round = icon;
-        if (round instanceof android.graphics.drawable.AdaptiveIconDrawable) {
-            return lifted(circle((android.graphics.drawable.AdaptiveIconDrawable) round));
-        }
-        if (round == icon) return null;
-        Bitmap own = Bitmap.createBitmap(ROUND_ICON_PX, ROUND_ICON_PX, Bitmap.Config.ARGB_8888);
-        round.setBounds(0, 0, ROUND_ICON_PX, ROUND_ICON_PX);
-        round.draw(new Canvas(own));
-        return lifted(own);
-    }
-
-    /**
-     * A round icon with a soft shadow under it. The tile is filled in the icon's own colour, so without the shadow a
-     * round icon on its own background melts into the card and looks exactly like the square one.
-     */
-    private Drawable lifted(Bitmap content) {
-        int margin = ROUND_ICON_PX / 10;
-        int size = ROUND_ICON_PX + 2 * margin;
-        Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(out);
-        android.graphics.Paint blur = new android.graphics.Paint();
-        blur.setMaskFilter(new android.graphics.BlurMaskFilter(margin * 0.6f, android.graphics.BlurMaskFilter.Blur.NORMAL));
-        int[] offset = new int[2];
-        Bitmap shadow = content.extractAlpha(blur, offset);
-        android.graphics.Paint shade = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
-        shade.setColor(0x59000000);
-        canvas.drawBitmap(shadow, margin + offset[0], margin + offset[1] + margin * 0.35f, shade);
-        canvas.drawBitmap(content, margin, margin, new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
-        shadow.recycle();
-        content.recycle();
-        return new android.graphics.drawable.BitmapDrawable(ctx.getResources(), out);
-    }
-
-    /** An adaptive icon's two layers inside a circle, drawn once into a bitmap so the edge is smooth. */
-    private Bitmap circle(android.graphics.drawable.AdaptiveIconDrawable adaptive) {
-        int size = ROUND_ICON_PX;
-        Bitmap layers = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(layers);
-        // The layers are 108 units across with the 72 in the middle meant to show: bleed 18 units each side.
-        int bleed = size / 4;
-        for (Drawable layer : new Drawable[]{adaptive.getBackground(), adaptive.getForeground()}) {
-            if (layer == null) continue;
-            layer.setBounds(-bleed, -bleed, size + bleed, size + bleed);
-            layer.draw(canvas);
-        }
-        Bitmap round = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        paint.setShader(new android.graphics.BitmapShader(layers, android.graphics.Shader.TileMode.CLAMP,
-                android.graphics.Shader.TileMode.CLAMP));
-        new Canvas(round).drawCircle(size / 2f, size / 2f, size / 2f, paint);
-        layers.recycle();
-        return round;
     }
 
     private Drawable loadBanner(PackageManager pm, ResolveInfo ri) {
@@ -595,7 +515,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         } else {
             h.banner.setImageDrawable(null);
             h.banner.setVisibility(View.GONE);
-            h.icon.setImageDrawable(e.round != null ? e.round : e.icon);
+            h.icon.setImageDrawable(e.icon);
             h.icon.setVisibility(View.VISIBLE);
             h.label.setText(e.label);
             h.label.setVisibility(uniformTiles || channelHome ? View.GONE : View.VISIBLE);
