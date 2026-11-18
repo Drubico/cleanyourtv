@@ -9,22 +9,28 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.content.res.Resources;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.os.UserManager;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.provider.Settings;
 import android.view.KeyEvent;
 import android.view.ViewConfiguration;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.Toast;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -49,7 +55,7 @@ import java.util.Set;
  *   settings put secure enabled_accessibility_services com.gathin.tvhome/.HomeKeyService
  *   settings put secure accessibility_enabled 1
  */
-public class HomeKeyService extends AccessibilityService {
+public class HomeKeyService extends AccessibilityService implements Runnable {
 
     /** restore_key_services was on when the config was read: this helper is noted for ServiceRepair. */
     private boolean repairRecord;
@@ -151,6 +157,7 @@ public class HomeKeyService extends AccessibilityService {
         }
         if (gamepads != null) gamepads.stop();
         if (consumeVolumeKeys) VolumeKeys.stop();
+        abortDeepClean();
         super.onDestroy();
     }
 
@@ -259,6 +266,7 @@ public class HomeKeyService extends AccessibilityService {
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        if (cancelDeepCleanIfNeeded(event)) return true;
         // power_on_home: the first key after power-on hands the TV to the user (power and wake keys don't count).
         if (powerOnUntil != 0 && event.getAction() == KeyEvent.ACTION_DOWN
                 && event.getKeyCode() != KeyEvent.KEYCODE_POWER && event.getKeyCode() != KeyEvent.KEYCODE_WAKEUP) {
@@ -432,6 +440,7 @@ public class HomeKeyService extends AccessibilityService {
     }
 
     private void openHome() {
+        abortDeepClean();
         Intent open = stockHomeStays() ? new Intent(this, MainActivity.class)
                 : new Intent(Intent.ACTION_MAIN).setPackage(getPackageName());
         startActivity(open.addCategory(Intent.CATEGORY_HOME)
@@ -451,6 +460,192 @@ public class HomeKeyService extends AccessibilityService {
         ResolveInfo home = getPackageManager().resolveActivity(
                 new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY);
         return home != null && stockHomePackage.equals(home.activityInfo.packageName);
+    }
+
+    private List<String> cleanQueue;
+    private int cleanIndex, cleanStage, cleanTicks, cleanStopped, savedEventTypes = -1;
+    private String forceStopText, okText;
+
+    @Override
+    public void run() {
+        stepDeepClean();
+    }
+
+    static boolean startDeepClean(List<String> pkgs) {
+        HomeKeyService service = running;
+        if (service == null || pkgs == null || pkgs.isEmpty()) return false;
+        service.beginDeepClean(pkgs);
+        return true;
+    }
+
+    private void beginDeepClean(List<String> pkgs) {
+        abortDeepClean();
+        forceStopText = settingsForceStopLabel();
+        okText = getString(android.R.string.ok);
+        AccessibilityServiceInfo info = getServiceInfo();
+        if (info != null) {
+            savedEventTypes = info.eventTypes;
+            info.eventTypes |= AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+                    | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED;
+            setServiceInfo(info);
+        }
+        cleanQueue = new ArrayList<>(pkgs);
+        cleanIndex = -1;
+        cleanStopped = 0;
+        nextCleanApp();
+    }
+
+    private String settingsForceStopLabel() {
+        try {
+            Resources r = getPackageManager().getResourcesForApplication("com.android.tv.settings");
+            int id = r.getIdentifier("device_apps_app_management_force_stop", "string", "com.android.tv.settings");
+            if (id != 0) return r.getString(id);
+        } catch (PackageManager.NameNotFoundException ignored) {
+        }
+        return null;
+    }
+
+    private boolean isAppStopped(String pkg) {
+        try {
+            return (getPackageManager().getApplicationInfo(pkg, 0).flags & ApplicationInfo.FLAG_STOPPED) != 0;
+        } catch (PackageManager.NameNotFoundException e) {
+            return true;
+        }
+    }
+
+    private void nextCleanApp() {
+        while (cleanQueue != null && ++cleanIndex < cleanQueue.size()) {
+            String pkg = cleanQueue.get(cleanIndex);
+            if (isAppStopped(pkg)) continue;
+            Intent intent = SystemSettings.appInfo(this, pkg);
+            if (intent == null) continue;
+            try {
+                startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
+            } catch (ActivityNotFoundException | SecurityException e) {
+                continue;
+            }
+            cleanStage = 0;
+            cleanTicks = 0;
+            handler.postDelayed(this, 260);
+            return;
+        }
+        finishDeepClean(false, cleanStopped);
+    }
+
+    private void stepDeepClean() {
+        if (cleanQueue == null || cleanIndex >= cleanQueue.size()) return;
+        String pkg = cleanQueue.get(cleanIndex);
+        if (isAppStopped(pkg)) {
+            cleanStopped++;
+            nextCleanApp();
+            return;
+        }
+        if (++cleanTicks > 16) {
+            nextCleanApp();
+            return;
+        }
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root != null && root.getPackageName() != null && !getPackageName().contentEquals(root.getPackageName())) {
+            if (cleanStage == 0) {
+                AccessibilityNodeInfo label = findCleanTarget(root, true);
+                if (label != null) {
+                    AccessibilityNodeInfo target = clickableAncestor(label);
+                    if (target == null || !label.isEnabled() || !target.isEnabled()) {
+                        nextCleanApp();
+                        return;
+                    }
+                    if (target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                        cleanStage = 1;
+                        cleanTicks = 0;
+                    }
+                }
+            } else if (cleanStage == 1) {
+                AccessibilityNodeInfo btn = findCleanTarget(root, false);
+                AccessibilityNodeInfo target = clickableAncestor(btn);
+                if (target != null && btn.isEnabled() && target.isEnabled()
+                        && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    cleanStage = 2;
+                    cleanTicks = 0;
+                }
+            } else if (cleanTicks > 5) {
+                nextCleanApp();
+                return;
+            }
+        }
+        handler.postDelayed(this, 220);
+    }
+
+    private AccessibilityNodeInfo findCleanTarget(AccessibilityNodeInfo node, boolean stageZero) {
+        if (node == null) return null;
+        String id = node.getViewIdResourceName();
+        CharSequence cs = node.getText();
+        String text = cs != null ? cs.toString().trim() : "";
+        if (stageZero) {
+            if ((forceStopText != null && text.equalsIgnoreCase(forceStopText))
+                    || text.equalsIgnoreCase("Forzar detención")
+                    || text.equalsIgnoreCase("Forzar detencion")
+                    || text.equalsIgnoreCase("Force stop")
+                    || (id != null && id.endsWith("force_stop") && clickableAncestor(node) != null)) {
+                return node;
+            }
+        } else if ("android:id/button1".equals(id)
+                || (okText != null && text.equalsIgnoreCase(okText))
+                || text.equalsIgnoreCase("Aceptar")
+                || text.equalsIgnoreCase("OK")) {
+            return node;
+        }
+        int count = node.getChildCount();
+        for (int i = 0; i < count; i++) {
+            AccessibilityNodeInfo hit = findCleanTarget(node.getChild(i), stageZero);
+            if (hit != null) return hit;
+        }
+        return null;
+    }
+
+    private static AccessibilityNodeInfo clickableAncestor(AccessibilityNodeInfo node) {
+        for (int i = 0; node != null && i < 5; i++, node = node.getParent()) {
+            if (node.isClickable()) return node;
+        }
+        return null;
+    }
+
+    private boolean cancelDeepCleanIfNeeded(KeyEvent event) {
+        if (cleanQueue != null && event.getAction() == KeyEvent.ACTION_DOWN) {
+            int code = event.getKeyCode();
+            if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_HOME) {
+                finishDeepClean(true, 0);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void abortDeepClean() {
+        handler.removeCallbacks(this);
+        cleanQueue = null;
+        if (savedEventTypes >= 0) {
+            AccessibilityServiceInfo info = getServiceInfo();
+            if (info != null) {
+                info.eventTypes = savedEventTypes;
+                setServiceInfo(info);
+            }
+            savedEventTypes = -1;
+        }
+    }
+
+    private void finishDeepClean(boolean canceled, int stopped) {
+        abortDeepClean();
+        openHome();
+        if (!canceled) {
+            boolean es = "es".equals(Locale.getDefault().getLanguage());
+            String msg = es
+                    ? (stopped > 0 ? "Cerradas de raíz: " + stopped + (stopped == 1 ? " app" : " apps")
+                            : "Las apps ya estaban detenidas")
+                    : (stopped > 0 ? "Force-stopped: " + stopped + (stopped == 1 ? " app" : " apps")
+                            : "Apps were already stopped");
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+        }
     }
 
     @Override

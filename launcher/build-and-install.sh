@@ -151,7 +151,7 @@ if ! printf '%s' "$START_OUT" | grep -qF 'Status: ok' || printf '%s' "$START_OUT
   exit 1
 fi
 printf '%s\n' \
-  "pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted" \
+  "pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; cmd appops set com.gathin.tvhome MANAGE_EXTERNAL_STORAGE allow 2>/dev/null; cmd appops set com.gathin.tvhome GET_USAGE_STATS allow 2>/dev/null; appops write-settings 2>/dev/null; echo location-granted" \
   "cmd package compile -m speed -f com.gathin.tvhome" \
   "$DISABLE_STOCK" \
   "cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity" \

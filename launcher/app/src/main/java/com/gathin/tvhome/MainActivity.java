@@ -3162,17 +3162,11 @@ public class MainActivity extends Activity
 
     private void playPetalShower() {
         if (isFinishing() || isDestroyed()) return;
-        if (festival.isHalloween()) {
-            BatFlightView bats = new BatFlightView(this);
-            root.addView(bats, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            bats.play(16, 2800, () -> root.removeView(bats));
-            return;
-        }
-        PetalShowerView shower = new PetalShowerView(this);
+        boolean halloween = festival.isHalloween();
+        PetalShowerView shower = new PetalShowerView(this, halloween);
         root.addView(shower, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        shower.play(60, 2200, () -> root.removeView(shower));
+        shower.play(halloween ? 16 : 60, halloween ? 2800 : 2200);
     }
 
     private static int liftTowardsWhite(int argb, float amount) {
@@ -3940,7 +3934,37 @@ public class MainActivity extends Activity
         return true;
     };
 
+    void showCleanMenu(View anchor) {
+        View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        LinearLayout rows = panel.findViewById(R.id.rows);
+        PopupWindow popup = glassPopup(panel, (int) (220 * density));
+        boolean es = "es".equals(Locale.getDefault().getLanguage());
+        addSettingsMenuRow(rows, es ? "Cerrar apps de raíz" : "Force stop apps", () -> {
+            ChannelHome.killBackgroundApps(this);
+            List<String> targets = ChannelHome.deepCleanTargets(this);
+            if (targets.isEmpty() && HomeKeyService.canOpenPowerMenu()) {
+                Toast.makeText(this, es ? "Todas las apps ya están cerradas"
+                        : "All background apps are already stopped", Toast.LENGTH_SHORT).show();
+            } else if (!HomeKeyService.startDeepClean(targets)) {
+                open(systemIntent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS));
+            }
+        });
+        addSettingsMenuRow(rows, es ? "Almacenamiento y caché" : "Storage & cache", () -> {
+            Intent s = new Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS);
+            open(getPackageManager().resolveActivity(s, PackageManager.MATCH_DEFAULT_ONLY) != null
+                    ? s : systemIntent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS));
+        });
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        popup.setWidth(Math.max((int) (220 * density), panel.getMeasuredWidth()));
+        dropIn(popup, panel, anchor, getResources().getBoolean(R.bool.rtl_menu_bar) ? Gravity.START : Gravity.END);
+        rows.getChildAt(0).requestFocus();
+    }
+
     private void addSettingsMenuRow(LinearLayout rows, PopupWindow popup, int title, Runnable action) {
+        addSettingsMenuRow(rows, getString(title), action);
+    }
+
+    private void addSettingsMenuRow(LinearLayout rows, CharSequence title, Runnable action) {
         View row = getLayoutInflater().inflate(R.layout.item_input, rows, false);
         row.findViewById(R.id.icon).setVisibility(View.GONE);
         row.findViewById(R.id.dot).setVisibility(View.GONE);

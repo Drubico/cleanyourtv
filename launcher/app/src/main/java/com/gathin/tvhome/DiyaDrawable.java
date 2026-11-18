@@ -296,12 +296,6 @@ public final class DiyaDrawable extends FestiveLamp {
         p.close();
     }
 
-    private static void cubics(Path p, boolean close, float... c) {
-        p.moveTo(c[0], c[1]);
-        for (int i = 2; i < c.length; i += 6) p.cubicTo(c[i], c[i + 1], c[i + 2], c[i + 3], c[i + 4], c[i + 5]);
-        if (close) p.close();
-    }
-
     private void buildLamp() {
         cubics(body, false, 1.6f, 14.2f, 1.8f, 18.6f, 5.4f, 21.0f, 9.6f, 21.0f,
                 13.2f, 21.0f, 15.6f, 19.4f, 16.8f, 16.6f, 17.6f, 15.0f, 18.6f, 13.6f, 20.2f, 12.4f);

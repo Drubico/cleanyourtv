@@ -1,81 +1,104 @@
 package com.gathin.tvhome;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RectF;
 import android.os.SystemClock;
-import android.util.AttributeSet;
 import android.view.View;
+import android.view.ViewGroup;
 
 import java.util.Random;
 
 /**
- * A transparent full-screen overlay that plays a one-off shower of marigold petals.
+ * Full-screen festive overlay: plays a one-off shower of marigold petals or a colony of Halloween bats.
  */
 public final class PetalShowerView extends View implements Runnable {
 
     private static final int[] COLORS = {0xFFFF8C1A, 0xFFFFB627, 0xFFF26A0D, 0xFFFFC93C, 0xFFE85D04};
-    private static final int EDGE = 0xFF7A2800, STRIDE = 14;
+    private static final int EDGE = 0xFF7A2800;
     private static final double TAU = 2 * Math.PI;
 
+    private final boolean bats;
     private final float density;
     private final Random rnd = new Random();
-    private final Path[] shapes = new Path[3], veins = new Path[3];
-    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Bitmap bat;
+    private final RectF dst;
+    private final Path[] shapes, veins;
 
     private int count;
     private float[] data = new float[0];
     private boolean playing;
     private long start, duration;
-    private Runnable onDone;
 
-    public PetalShowerView(Context context) { this(context, null, 0); }
-    public PetalShowerView(Context context, AttributeSet attrs) { this(context, attrs, 0); }
+    public PetalShowerView(Context context) {
+        this(context, false);
+    }
 
-    public PetalShowerView(Context context, AttributeSet attrs, int defStyleAttr) {
-        super(context, attrs, defStyleAttr);
+    public PetalShowerView(Context context, boolean bats) {
+        super(context);
+        this.bats = bats;
         density = context.getResources().getDisplayMetrics().density;
         setFocusable(false);
         setClickable(false);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         setWillNotDraw(false);
-        paint.setStrokeCap(Paint.Cap.ROUND);
-        paint.setStrokeJoin(Paint.Join.ROUND);
-
-        Random seeded = new Random(0x9E7A1L);
-        for (int i = 0; i < shapes.length; i++) {
-            shapes[i] = petalShape(seeded);
-            veins[i] = veinPath(seeded);
+        if (bats) {
+            bat = BitmapFactory.decodeResource(context.getResources(), R.drawable.halloween_bat);
+            dst = new RectF();
+            shapes = null;
+            veins = null;
+        } else {
+            bat = null;
+            dst = null;
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            shapes = new Path[3];
+            veins = new Path[3];
+            Random seeded = new Random(0x9E7A1L);
+            for (int i = 0; i < shapes.length; i++) {
+                shapes[i] = petalShape(seeded);
+                veins[i] = veinPath(seeded);
+            }
         }
     }
 
-    public void play(int petals, long durationMs, Runnable done) {
-        if (playing) {
-            removeCallbacks(this);
-            run();
-        }
-        int n = Math.max(0, petals);
-        if (data.length < n * STRIDE) data = new float[n * STRIDE];
+    public void play(int items, long durationMs) {
+        removeCallbacks(this);
+        int n = Math.max(0, items), stride = bats ? 8 : 14;
+        if (data.length < n * stride) data = new float[n * stride];
         count = n;
         duration = Math.max(1, durationMs);
-        onDone = done;
         for (int i = 0; i < n; i++) {
-            int o = i * STRIDE;
+            int o = i * stride;
             data[o] = (i + rnd.nextFloat()) / n;
-            data[o + 1] = rnd.nextFloat() * 0.32f;
-            data[o + 2] = 0.6f + rnd.nextFloat() * (1f - data[o + 1] - 0.6f);
-            data[o + 3] = 0.8f + rnd.nextFloat() * 0.35f;
-            data[o + 4] = 9f + rnd.nextFloat() * 7f;
-            data[o + 5] = 10f + rnd.nextFloat() * 24f;
-            data[o + 6] = 0.5f + rnd.nextFloat() * 0.6f;
-            data[o + 7] = rnd.nextFloat() * (float) TAU;
-            data[o + 8] = rnd.nextFloat() * 360f;
-            data[o + 9] = (40f + rnd.nextFloat() * 120f) * (rnd.nextBoolean() ? 1f : -1f);
-            data[o + 10] = 0.4f + rnd.nextFloat();
-            data[o + 11] = rnd.nextFloat() * (float) TAU;
-            data[o + 12] = rnd.nextInt(COLORS.length);
-            data[o + 13] = rnd.nextInt(shapes.length);
+            if (bats) {
+                data[o + 1] = (rnd.nextFloat() - 0.5f) * 0.5f;
+                data[o + 2] = rnd.nextFloat() * 0.35f;
+                data[o + 3] = 0.55f + rnd.nextFloat() * (1f - data[o + 2] - 0.55f);
+                data[o + 4] = 26f + rnd.nextFloat() * 30f;
+                data[o + 5] = 5f + rnd.nextFloat() * 3f;
+                data[o + 6] = rnd.nextFloat() * (float) TAU;
+                data[o + 7] = 8f + rnd.nextFloat() * 18f;
+            } else {
+                data[o + 1] = rnd.nextFloat() * 0.32f;
+                data[o + 2] = 0.6f + rnd.nextFloat() * (1f - data[o + 1] - 0.6f);
+                data[o + 3] = 0.8f + rnd.nextFloat() * 0.35f;
+                data[o + 4] = 9f + rnd.nextFloat() * 7f;
+                data[o + 5] = 10f + rnd.nextFloat() * 24f;
+                data[o + 6] = 0.5f + rnd.nextFloat() * 0.6f;
+                data[o + 7] = rnd.nextFloat() * (float) TAU;
+                data[o + 8] = rnd.nextFloat() * 360f;
+                data[o + 9] = (40f + rnd.nextFloat() * 120f) * (rnd.nextBoolean() ? 1f : -1f);
+                data[o + 10] = 0.4f + rnd.nextFloat();
+                data[o + 11] = rnd.nextFloat() * (float) TAU;
+                data[o + 12] = rnd.nextInt(COLORS.length);
+                data[o + 13] = rnd.nextInt(shapes.length);
+            }
         }
         playing = true;
         start = SystemClock.uptimeMillis();
@@ -88,18 +111,14 @@ public final class PetalShowerView extends View implements Runnable {
         if (!playing) return;
         playing = false;
         invalidate();
-        Runnable done = onDone;
-        onDone = null;
-        if (done != null) done.run();
+        if (getParent() instanceof ViewGroup) ((ViewGroup) getParent()).removeView(this);
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        if (playing) {
-            removeCallbacks(this);
-            run();
-        }
+        removeCallbacks(this);
+        playing = false;
     }
 
     @Override
@@ -108,8 +127,26 @@ public final class PetalShowerView extends View implements Runnable {
         long now = SystemClock.uptimeMillis();
         float elapsed = (now - start) / (float) duration, secs = (now - start) / 1000f;
         float w = getWidth(), h = getHeight();
+        int stride = bats ? 8 : 14;
         for (int i = 0; i < count; i++) {
-            int o = i * STRIDE;
+            int o = i * stride;
+            if (bats) {
+                float p = (elapsed - data[o + 2]) / data[o + 3];
+                if (p <= 0f || p >= 1f) continue;
+                float s = data[o + 4] * density, rise = p * (0.6f + 0.4f * p);
+                float y = h + s - (h + 2.5f * s) * rise;
+                float x = (data[o] + data[o + 1] * p) * w + data[o + 7] * density * (float) Math.sin(TAU * 0.8 * secs + data[o + 6]);
+                float sy = 0.62f + 0.38f * Math.abs((float) Math.sin(TAU * data[o + 5] * secs + data[o + 6]));
+                int a = p < 0.12f ? (int) (255 * p / 0.12f) : p > 0.8f ? (int) (255 * (1f - (p - 0.8f) / 0.2f)) : 255;
+                paint.setAlpha(a);
+                c.save();
+                c.translate(x, y);
+                c.scale(data[o + 1] < 0f ? -1f : 1f, sy);
+                dst.set(-s / 2f, -s / 2f, s / 2f, s / 2f);
+                c.drawBitmap(bat, null, dst, paint);
+                c.restore();
+                continue;
+            }
             float p = (elapsed - data[o + 1]) / data[o + 2];
             if (p <= 0f || p >= 1f) continue;
             float len = data[o + 4] * density, fall = (p + p * p) * 0.5f;
@@ -128,12 +165,12 @@ public final class PetalShowerView extends View implements Runnable {
             c.rotate(angle);
             c.scale(len * sx, len);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(scale(base, shade));
+            paint.setColor(Sky.lerpColor(0xFF000000, base, shade));
             paint.setAlpha(a);
             c.drawPath(shapes[sh], paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(0.045f);
-            paint.setColor(scale(base, 0.55f));
+            paint.setColor(Sky.lerpColor(0xFF000000, base, 0.55f));
             paint.setAlpha(a * 3 / 4);
             c.drawPath(shapes[sh], paint);
             paint.setStrokeWidth(0.035f);
@@ -172,12 +209,5 @@ public final class PetalShowerView extends View implements Runnable {
         p.moveTo(0f, 0.3f);
         p.quadTo(0.12f, -0.05f, 0.2f, -0.3f);
         return p;
-    }
-
-    private static int scale(int c, float f) {
-        int r = Math.min(255, (int) (((c >> 16) & 0xFF) * f));
-        int g = Math.min(255, (int) (((c >> 8) & 0xFF) * f));
-        int b = Math.min(255, (int) ((c & 0xFF) * f));
-        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 }

@@ -5,6 +5,7 @@ import android.animation.ValueAnimator;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.Animatable;
@@ -116,5 +117,11 @@ public abstract class FestiveLamp extends Drawable
     @SuppressWarnings("deprecation")
     public int getOpacity() {
         return PixelFormat.TRANSLUCENT;
+    }
+
+    static void cubics(Path p, boolean close, float... c) {
+        p.moveTo(c[0], c[1]);
+        for (int i = 2; i < c.length; i += 6) p.cubicTo(c[i], c[i + 1], c[i + 2], c[i + 3], c[i + 4], c[i + 5]);
+        if (close) p.close();
     }
 }

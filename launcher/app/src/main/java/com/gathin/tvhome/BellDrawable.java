@@ -92,9 +92,8 @@ public final class BellDrawable extends FestiveLamp {
     }
 
     private void buildPaths() {
-        body.moveTo(9.8f, 5.0f);
-        body.cubicTo(7.6f, 5.3f, 7.0f, 7.8f, 7.0f, 10.6f);
-        body.cubicTo(7.0f, 13.6f, 6.6f, 15.6f, 5.3f, 16.9f);
+        cubics(body, false, 9.8f, 5.0f, 7.6f, 5.3f, 7.0f, 7.8f, 7.0f, 10.6f,
+                7.0f, 13.6f, 6.6f, 15.6f, 5.3f, 16.9f);
         body.quadTo(5.0f, 17.5f, 5.5f, 18.0f);
         body.cubicTo(8.6f, 18.9f, 15.4f, 18.9f, 18.5f, 18.0f);
         body.quadTo(19.0f, 17.5f, 18.7f, 16.9f);
@@ -109,16 +108,10 @@ public final class BellDrawable extends FestiveLamp {
         lip.quadTo(19.0f, 17.5f, 18.7f, 16.9f);
         lip.cubicTo(15.4f, 17.7f, 8.6f, 17.7f, 5.3f, 16.9f);
         lip.close();
-        lipTop.moveTo(5.3f, 16.9f);
-        lipTop.cubicTo(8.6f, 17.7f, 15.4f, 17.7f, 18.7f, 16.9f);
-
-        band1.moveTo(7.15f, 9.0f);
-        band1.cubicTo(9.5f, 9.7f, 14.5f, 9.7f, 16.85f, 9.0f);
-        band2.moveTo(6.8f, 14.9f);
-        band2.cubicTo(9.2f, 15.7f, 14.8f, 15.7f, 17.2f, 14.9f);
-
-        sheen.moveTo(9.2f, 6.2f);
-        sheen.cubicTo(8.3f, 7.8f, 8.2f, 11.4f, 8.0f, 15.0f);
+        cubics(lipTop, false, 5.3f, 16.9f, 8.6f, 17.7f, 15.4f, 17.7f, 18.7f, 16.9f);
+        cubics(band1, false, 7.15f, 9.0f, 9.5f, 9.7f, 14.5f, 9.7f, 16.85f, 9.0f);
+        cubics(band2, false, 6.8f, 14.9f, 9.2f, 15.7f, 14.8f, 15.7f, 17.2f, 14.9f);
+        cubics(sheen, false, 9.2f, 6.2f, 8.3f, 7.8f, 8.2f, 11.4f, 8.0f, 15.0f);
     }
 
     private Paint fill(Shader s) {

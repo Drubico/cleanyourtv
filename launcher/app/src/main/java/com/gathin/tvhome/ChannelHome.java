@@ -1,7 +1,13 @@
 package com.gathin.tvhome;
 
+import android.app.ActivityManager;
+import android.app.usage.UsageStats;
+import android.app.usage.UsageStatsManager;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapShader;
@@ -16,6 +22,7 @@ import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Environment;
 import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -27,25 +34,33 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextClock;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * channel_home: the light "channels" Home. The header is gone; the apps are one plain grid of light tiles, with
  * empty slots drawn where the grid has no app yet, and a bar with a curved top edge runs along the bottom of the
  * screen: the clock above its dip, the date inside it, a profile button and the store on the left shoulder and
- * the network and Settings on the right one.
+ * clean, the network and Settings on the right one.
  */
 final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.OnFocusChangeListener,
-        View.OnClickListener, View.OnLongClickListener, View.OnLayoutChangeListener, View.OnScrollChangeListener {
+        View.OnClickListener, View.OnLongClickListener, View.OnLayoutChangeListener,
+        View.OnScrollChangeListener, Runnable {
 
     static final float BAR_DP = 150, SHOULDER_DP = 38, DIP_DP = 88;
     static final float CONTENT_BOTTOM_DP = BAR_DP - SHOULDER_DP, CONTENT_TOP_DP = 10;
-    private static final float CURVE_FROM = 0.215f, CURVE_TO = 0.385f;
+    private static final float CURVE_FROM = 0.262f, CURVE_TO = 0.392f;
     static final int[] TILE_COLORS = {0xFFF7F7F9, 0xFFE0E2E7, 0xFFEBEDF1};
     static final int INK = 0xFF2B3A55;
 
@@ -63,11 +78,14 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     private Shader bandShader, tileShader;
     private int shaderHeight = -1, netState = Integer.MIN_VALUE;
     private final boolean appLibrary;
-    private View profile, shop, library, settings;
+    private View profile, shop, library, clean, settings;
     private ImageView network;
     private Intent storeIntent;
     private TextView date;
     private java.time.format.DateTimeFormatter dateFormat;
+    private boolean cleaning;
+    private long cleanBeforeAvail, cleanDeletedBytes;
+    private int cleanDeletedFiles;
 
     private ChannelHome(MainActivity host, RecyclerView grid, AppAdapter adapter, View btnSettings,
                         int columns, int rows, int sidePadding, int accent, boolean appLibrary) {
@@ -138,7 +156,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         ClockFormat.apply(clock, clockFormat);
 
         int big = Math.round(72 * density), small = Math.round(56 * density);
-        int edgePx = Math.round(46 * density);
+        int edgePx = Math.round(38 * density), gap = Math.round(12 * density);
         int shoulderMid = Math.round((BAR_DP + SHOULDER_DP) / 2f * density);
 
         Bitmap pic = cfg.profilePicture == null ? null : circlePhoto(cfg.profilePicture.getPath(), big - Math.round(6 * density));
@@ -165,31 +183,38 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         PackageManager pm = host.getPackageManager();
         Intent store = cfg.storePackage.isEmpty() ? null : pm.getLeanbackLaunchIntentForPackage(cfg.storePackage);
         if (store == null && !cfg.storePackage.isEmpty()) store = pm.getLaunchIntentForPackage(cfg.storePackage);
+        int left2 = edgePx + big + Math.round(14 * density);
         if (store != null) {
             try {
                 ImageView shop = home.iconButton(pm.getApplicationIcon(cfg.storePackage), small, 0.24f, false);
                 shop.setContentDescription(pm.getApplicationLabel(pm.getApplicationInfo(cfg.storePackage, 0)));
                 home.storeIntent = store;
                 home.shop = shop;
-                home.add(shop, small, Gravity.START, edgePx + big + Math.round(16 * density), shoulderMid, false);
+                home.add(shop, small, Gravity.START, left2, shoulderMid, false);
             } catch (PackageManager.NameNotFoundException ignored) {
             }
         } else if (cfg.appLibrary) {
             ImageView lib = home.iconButton(host.getDrawable(R.drawable.ic_apps_pill).mutate(), small, 0.27f, true);
             lib.setContentDescription(host.getString(R.string.app_library));
             home.library = lib;
-            home.add(lib, small, Gravity.START, edgePx + big + Math.round(16 * density), shoulderMid, false);
+            home.add(lib, small, Gravity.START, left2, shoulderMid, false);
         }
 
+        ImageView clean = new ImageView(host);
+        clean.setScaleType(ImageView.ScaleType.CENTER);
+        clean.setImageBitmap(cleanIcon(Math.round(44 * density), accent));
+        clean.setContentDescription("es".equals(Locale.getDefault().getLanguage()) ? "Limpiar" : "Clean");
         ImageView settings = home.iconButton(host.getDrawable(R.drawable.ic_settings).mutate(), big, 0.27f, true);
         settings.setContentDescription(host.getString(R.string.settings));
         ImageView network = new ImageView(host);
         network.setScaleType(ImageView.ScaleType.CENTER);
         network.setContentDescription(host.getString(R.string.wifi));
+        home.clean = clean;
         home.network = network;
         home.settings = settings;
         home.showNetwork(true, false, 3);
-        home.add(network, small, Gravity.END, edgePx + big + Math.round(16 * density), shoulderMid, true);
+        home.add(clean, small, Gravity.END, edgePx + big + small + 2 * gap, shoulderMid, true);
+        home.add(network, small, Gravity.END, edgePx + big + gap, shoulderMid, true);
         home.add(settings, big, Gravity.END, edgePx, shoulderMid, true);
 
         grid.addOnLayoutChangeListener(home);
@@ -363,6 +388,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         if (v == profile) host.open(SystemSettings.intent(host, Settings.ACTION_SYNC_SETTINGS));
         else if (v == shop && storeIntent != null) host.open(new Intent(storeIntent));
         else if (v == library) host.onLibraryRequested();
+        else if (v == clean) runInstantClean();
         else if (v == network) host.openNetworkPill();
         else if (v == settings) btnSettings.performClick();
     }
@@ -370,6 +396,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     @Override
     public boolean onLongClick(View v) {
         if (v == settings) btnSettings.performLongClick();
+        else if (v == clean) host.showCleanMenu(clean);
         else if (v == profile && appLibrary) host.onLibraryRequested();
         else if (v == network) host.open(SystemSettings.intent(host, Settings.ACTION_WIFI_SETTINGS));
         else return false;
@@ -476,6 +503,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     static int buttonIndexForColumn(int column, int columns, int buttonCount) {
         if (buttonCount <= 1 || columns <= 1 || column <= 0) return 0;
         if (column >= columns - 1) return buttonCount - 1;
+        if (buttonCount >= 5) return column * 2 < columns ? 1 : 2;
         return column * 2 < columns ? Math.max(0, buttonCount - 3) : Math.max(0, buttonCount - 2);
     }
 
@@ -484,6 +512,209 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         View target = buttons.get(buttonIndexForColumn(column, columns, buttons.size()));
         target.requestFocus();
         target.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
+    }
+
+    private void runInstantClean() {
+        if (cleaning) return;
+        cleaning = true;
+        clean.setRotation(0f);
+        clean.animate().rotation(360f).setDuration(420).start();
+        cleanBeforeAvail = availMemBytes(host);
+        killBackgroundApps(host);
+        long[] apks = deleteInstallerApks();
+        cleanDeletedFiles = (int) apks[0];
+        cleanDeletedBytes = apks[1];
+        postDelayed(this, 280);
+    }
+
+    @Override
+    public void run() {
+        cleaning = false;
+        long afterAvail = availMemBytes(host);
+        long freedMb = Math.max(0L, (afterAvail - cleanBeforeAvail) / 1048576L);
+        long freeMb = afterAvail / 1048576L;
+        boolean es = "es".equals(Locale.getDefault().getLanguage());
+        String msg = es
+                ? (freedMb > 0 ? "Liberados " + freedMb + " MB · " + freeMb + " MB libres"
+                        : "RAM al día · " + freeMb + " MB libres")
+                : (freedMb > 0 ? "Freed " + freedMb + " MB · " + freeMb + " MB free"
+                        : "RAM clean · " + freeMb + " MB free");
+        if (cleanDeletedFiles > 0) {
+            msg += " · +" + Math.max(1L, cleanDeletedBytes / 1048576L) + " MB (" + cleanDeletedFiles + " APK)";
+        }
+        Toast.makeText(host, msg, Toast.LENGTH_LONG).show();
+    }
+
+    private static long availMemBytes(Context ctx) {
+        ActivityManager am = ctx.getSystemService(ActivityManager.class);
+        ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+        if (am != null) am.getMemoryInfo(mi);
+        return mi.availMem;
+    }
+
+    private static Set<String> protectedPackages(Context ctx) {
+        Set<String> keep = new HashSet<>();
+        keep.add(ctx.getPackageName());
+        keep.add("android");
+        String sec = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.DEFAULT_INPUT_METHOD)
+                + " " + Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        for (String part : sec.split("[^A-Za-z0-9_.]+")) {
+            int slash = part.indexOf('/');
+            String p = slash > 0 ? part.substring(0, slash) : part;
+            if (!p.isEmpty()) keep.add(p);
+        }
+        for (ResolveInfo ri : ctx.getPackageManager().queryIntentActivities(
+                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)) {
+            if (ri.activityInfo != null) keep.add(ri.activityInfo.packageName);
+        }
+        return keep;
+    }
+
+    private static boolean isProtectedPackage(String pkg, Set<String> keep) {
+        return pkg == null || keep.contains(pkg) || pkg.startsWith("com.android.")
+                || pkg.equals("com.google.android.gms") || pkg.equals("com.google.android.gsf")
+                || pkg.equals("com.google.android.katniss") || pkg.equals("com.google.android.apps.mediashell")
+                || pkg.equals("com.google.android.tv.remote.service")
+                || pkg.startsWith("com.google.android.inputmethod")
+                || pkg.startsWith("com.google.android.marvin")
+                || pkg.startsWith("com.google.android.tungsten");
+    }
+
+    private static Set<String> visiblePackages(PackageManager pm) {
+        Set<String> pkgs = new HashSet<>();
+        for (String cat : new String[]{Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER}) {
+            for (ResolveInfo ri : pm.queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(cat), 0)) {
+                if (ri.activityInfo != null) pkgs.add(ri.activityInfo.packageName);
+            }
+        }
+        return pkgs;
+    }
+
+    static void killBackgroundApps(Context ctx) {
+        ActivityManager am = ctx.getSystemService(ActivityManager.class);
+        if (am == null) return;
+        PackageManager pm = ctx.getPackageManager();
+        Set<String> keep = protectedPackages(ctx);
+        Set<String> pkgs = visiblePackages(pm);
+        for (ApplicationInfo ai : pm.getInstalledApplications(0)) pkgs.add(ai.packageName);
+        for (String pkg : pkgs) {
+            if (!isProtectedPackage(pkg, keep)) am.killBackgroundProcesses(pkg);
+        }
+    }
+
+    static List<String> deepCleanTargets(Context ctx) {
+        PackageManager pm = ctx.getPackageManager();
+        Set<String> keep = protectedPackages(ctx);
+        UsageStatsManager usm = ctx.getSystemService(UsageStatsManager.class);
+        long now = System.currentTimeMillis(), since = now - 86_400_000L;
+        Map<String, UsageStats> usage = usm == null ? Collections.emptyMap() : usm.queryAndAggregateUsageStats(since, now);
+        List<String> list = new ArrayList<>();
+        long[] scores = new long[64];
+        for (String pkg : visiblePackages(pm)) {
+            if (isProtectedPackage(pkg, keep)) continue;
+            try {
+                ApplicationInfo ai = pm.getApplicationInfo(pkg, 0);
+                if ((ai.flags & ApplicationInfo.FLAG_STOPPED) != 0) continue;
+                boolean user = (ai.flags & ApplicationInfo.FLAG_SYSTEM) == 0;
+                UsageStats st = usage.get(pkg);
+                long last = st != null ? st.getLastTimeUsed() : 0L;
+                if (!usage.isEmpty() && last < since && !user) continue;
+                int idx = list.size();
+                if (idx >= scores.length) continue;
+                scores[idx] = last > 0 ? last : (user ? 1L : 0L);
+                list.add(pkg);
+            } catch (PackageManager.NameNotFoundException ignored) {
+            }
+        }
+        for (int i = 0; i < list.size(); i++) {
+            int best = i;
+            for (int j = i + 1; j < list.size(); j++) {
+                if (scores[j] > scores[best]) best = j;
+            }
+            if (best != i) {
+                long s = scores[i]; scores[i] = scores[best]; scores[best] = s;
+                String p = list.get(i); list.set(i, list.get(best)); list.set(best, p);
+            }
+        }
+        return list.size() > 6 ? list.subList(0, 6) : list;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static long[] deleteInstallerApks() {
+        long[] out = new long[2];
+        Set<String> seen = new HashSet<>();
+        File[] dirs = {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                new File(Environment.getExternalStorageDirectory(), "Downloads")
+        };
+        for (File dir : dirs) scanApks(dir, 0, seen, out);
+        return out;
+    }
+
+    private static void scanApks(File dir, int depth, Set<String> seen, long[] out) {
+        if (dir == null || depth > 2 || !dir.isDirectory()) return;
+        try {
+            String key = dir.getCanonicalPath();
+            if (!seen.add(key)) return;
+            File[] kids = dir.listFiles();
+            if (kids == null) return;
+            for (File f : kids) {
+                if (f.isDirectory()) {
+                    scanApks(f, depth + 1, seen, out);
+                } else if (f.isFile()) {
+                    String n = f.getName().toLowerCase(Locale.US);
+                    if (n.endsWith(".apk") || n.endsWith(".apks") || n.endsWith(".xapk")) {
+                        long len = f.length();
+                        if (f.delete()) {
+                            out[0]++;
+                            out[1] += len;
+                        }
+                    }
+                }
+            }
+        } catch (IOException | SecurityException ignored) {
+        }
+    }
+
+    private static Bitmap cleanIcon(int size, int accent) {
+        Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(accent);
+        float u = size / 36f, r = size / 2f;
+        c.save();
+        c.rotate(40f, r, r);
+        Path path = new Path();
+        p.setStyle(Paint.Style.FILL);
+        c.drawRoundRect(r - 1.5f * u, r - 13f * u, r + 1.5f * u, r - 2.2f * u, 1.5f * u, 1.5f * u, p);
+        c.drawRoundRect(r - 5f * u, r - 2.2f * u, r + 5f * u, r + 1.1f * u, 1.2f * u, 1.2f * u, p);
+        path.moveTo(r - 4.8f * u, r + 2.2f * u);
+        path.lineTo(r + 4.8f * u, r + 2.2f * u);
+        path.lineTo(r + 8.6f * u, r + 12f * u);
+        path.lineTo(r + 4.2f * u, r + 12f * u);
+        path.lineTo(r + 3.2f * u, r + 7.2f * u);
+        path.lineTo(r + 2.1f * u, r + 12f * u);
+        path.lineTo(r - 2.1f * u, r + 12f * u);
+        path.lineTo(r - 3.2f * u, r + 7.2f * u);
+        path.lineTo(r - 4.2f * u, r + 12f * u);
+        path.lineTo(r - 8.6f * u, r + 12f * u);
+        path.close();
+        c.drawPath(path, p);
+        c.restore();
+        sparkle(c, p, path, r - 9f * u, r - 7f * u, 3.6f * u);
+        sparkle(c, p, path, r + 9.5f * u, r + 4.5f * u, 2.8f * u);
+        return out;
+    }
+
+    private static void sparkle(Canvas c, Paint p, Path path, float x, float y, float s) {
+        float k = s * 0.22f;
+        path.rewind();
+        path.moveTo(x, y - s);
+        path.quadTo(x + k, y - k, x + s, y);
+        path.quadTo(x + k, y + k, x, y + s);
+        path.quadTo(x - k, y + k, x - s, y);
+        path.quadTo(x - k, y - k, x, y - s);
+        c.drawPath(path, p);
     }
 
     private static Bitmap circlePhoto(String path, int size) {
