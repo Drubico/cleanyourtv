@@ -79,11 +79,11 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     private int shaderHeight = -1, netState = Integer.MIN_VALUE;
     private final boolean appLibrary;
     private View profile, shop, library, clean, settings;
-    private ImageView network;
+    private ImageView monitor, network;
     private Intent storeIntent;
     private TextView date;
     private java.time.format.DateTimeFormatter dateFormat;
-    private boolean cleaning;
+    private boolean cleaning, monState;
     private long cleanBeforeAvail, cleanDeletedBytes;
     private int cleanDeletedFiles;
 
@@ -183,7 +183,8 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         PackageManager pm = host.getPackageManager();
         Intent store = cfg.storePackage.isEmpty() ? null : pm.getLeanbackLaunchIntentForPackage(cfg.storePackage);
         if (store == null && !cfg.storePackage.isEmpty()) store = pm.getLaunchIntentForPackage(cfg.storePackage);
-        int left2 = edgePx + big + Math.round(14 * density);
+        int left2 = edgePx + big + gap;
+        boolean hasSecondLeft = false;
         if (store != null) {
             try {
                 ImageView shop = home.iconButton(pm.getApplicationIcon(cfg.storePackage), small, 0.24f, false);
@@ -191,6 +192,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
                 home.storeIntent = store;
                 home.shop = shop;
                 home.add(shop, small, Gravity.START, left2, shoulderMid, false);
+                hasSecondLeft = true;
             } catch (PackageManager.NameNotFoundException ignored) {
             }
         } else if (cfg.appLibrary) {
@@ -198,7 +200,14 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
             lib.setContentDescription(host.getString(R.string.app_library));
             home.library = lib;
             home.add(lib, small, Gravity.START, left2, shoulderMid, false);
+            hasSecondLeft = true;
         }
+        ImageView monitor = new ImageView(host);
+        monitor.setScaleType(ImageView.ScaleType.CENTER);
+        monitor.setContentDescription("Monitor");
+        home.monitor = monitor;
+        home.syncMonitorIcon(true);
+        home.add(monitor, small, Gravity.START, hasSecondLeft ? edgePx + big + small + 2 * gap : left2, shoulderMid, true);
 
         ImageView clean = new ImageView(host);
         clean.setScaleType(ImageView.ScaleType.CENTER);
@@ -388,6 +397,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         if (v == profile) host.open(SystemSettings.intent(host, Settings.ACTION_SYNC_SETTINGS));
         else if (v == shop && storeIntent != null) host.open(new Intent(storeIntent));
         else if (v == library) host.onLibraryRequested();
+        else if (v == monitor) toggleMonitor();
         else if (v == clean) runInstantClean();
         else if (v == network) host.openNetworkPill();
         else if (v == settings) btnSettings.performClick();
@@ -396,6 +406,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     @Override
     public boolean onLongClick(View v) {
         if (v == settings) btnSettings.performLongClick();
+        else if (v == monitor) host.showMonitorMenu(monitor);
         else if (v == clean) host.showCleanMenu(clean);
         else if (v == profile && appLibrary) host.onLibraryRequested();
         else if (v == network) host.open(SystemSettings.intent(host, Settings.ACTION_WIFI_SETTINGS));
@@ -438,6 +449,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     }
 
     void showNetwork(boolean online, boolean ethernet, int level) {
+        syncMonitorIcon(false);
         if (network == null) return;
         level = Math.max(0, Math.min(4, level));
         int state = !online ? -1 : ethernet ? 5 : level;
@@ -503,8 +515,47 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     static int buttonIndexForColumn(int column, int columns, int buttonCount) {
         if (buttonCount <= 1 || columns <= 1 || column <= 0) return 0;
         if (column >= columns - 1) return buttonCount - 1;
-        if (buttonCount >= 5) return column * 2 < columns ? 1 : 2;
+        if (buttonCount >= 6) return column * 2 < columns ? 2 : 3;
+        if (buttonCount == 5) return column * 2 < columns ? 1 : 2;
         return column * 2 < columns ? Math.max(0, buttonCount - 3) : Math.max(0, buttonCount - 2);
+    }
+
+    void syncMonitorIcon(boolean force) {
+        if (monitor == null) return;
+        boolean active = HomeKeyService.isMonitorActive();
+        if (!force && active == monState) return;
+        monState = active;
+        monitor.setImageBitmap(monitorIcon(Math.round(44 * density), active ? 0xFF16A34A : accent));
+    }
+
+    private void toggleMonitor() {
+        boolean es = "es".equals(Locale.getDefault().getLanguage());
+        if (!HomeKeyService.canOpenPowerMenu()) {
+            Toast.makeText(host, es ? "Activa el servicio de teclas para el monitor"
+                    : "Enable Home key service for monitor", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        boolean on = HomeKeyService.toggleMonitor();
+        syncMonitorIcon(true);
+        if (!on) Toast.makeText(host, es ? "Monitor oculto" : "Monitor hidden", Toast.LENGTH_SHORT).show();
+    }
+
+    private static Bitmap monitorIcon(int size, int color) {
+        Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(color);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        float r = size / 2f, cx = r, cy = r * 1.08f, rad = r * 0.66f;
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(r * 0.16f);
+        RectF oval = new RectF(cx - rad, cy - rad, cx + rad, cy + rad);
+        c.drawArc(oval, 150f, 240f, false, p);
+        p.setStrokeWidth(r * 0.14f);
+        c.drawLine(cx, cy, cx + r * 0.36f, cy - r * 0.36f, p);
+        p.setStyle(Paint.Style.FILL);
+        c.drawCircle(cx, cy, r * 0.14f, p);
+        return out;
     }
 
     void focusFrom(int column) {

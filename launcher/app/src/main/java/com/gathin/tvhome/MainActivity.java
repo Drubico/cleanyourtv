@@ -3,6 +3,7 @@ package com.gathin.tvhome;
 import android.animation.ArgbEvaluator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
@@ -3933,6 +3934,36 @@ public class MainActivity extends Activity
         if (activate) v.performClick();
         return true;
     };
+
+    @SuppressWarnings("deprecation")
+    void showMonitorMenu(View anchor) {
+        View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        LinearLayout rows = panel.findViewById(R.id.rows);
+        PopupWindow popup = glassPopup(panel, (int) (220 * density));
+        boolean es = "es".equals(Locale.getDefault().getLanguage());
+        addSettingsMenuRow(rows, es ? "Cambiar esquina (Der / Izq)" : "Switch corner (Right / Left)", () -> {
+            HomeKeyService.flipMonitorCorner();
+            if (channelHome != null) channelHome.syncMonitorIcon(true);
+        });
+        addSettingsMenuRow(rows, es ? "Diagnóstico Wi-Fi y memoria" : "Wi-Fi & memory status", () -> {
+            ActivityManager am = getSystemService(ActivityManager.class);
+            ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+            if (am != null) am.getMemoryInfo(mi);
+            long freeMb = mi.availMem / 1048576L, totalMb = mi.totalMem / 1048576L;
+            long gbTenths = Math.round(Environment.getDataDirectory().getUsableSpace() / 1e8);
+            WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            WifiInfo wi = wm != null ? wm.getConnectionInfo() : null;
+            int spd = wi != null && wi.getLinkSpeed() > 0 ? wi.getLinkSpeed() : 0;
+            String net = spd > 0 ? (es ? "Enlace " : "Link ") + spd + " Mbps (" + wi.getRssi() + " dBm) · " : "";
+            Toast.makeText(this, net + "RAM " + freeMb + "/" + totalMb + " MB · "
+                    + (es ? "Disco " : "Disk ") + (gbTenths / 10) + "." + (gbTenths % 10) + " GB",
+                    Toast.LENGTH_LONG).show();
+        });
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        popup.setWidth(Math.max((int) (220 * density), panel.getMeasuredWidth()));
+        dropIn(popup, panel, anchor, getResources().getBoolean(R.bool.rtl_menu_bar) ? Gravity.END : Gravity.START);
+        rows.getChildAt(0).requestFocus();
+    }
 
     void showCleanMenu(View anchor) {
         View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);

@@ -2,6 +2,7 @@ package com.gathin.tvhome;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.app.ActivityManager;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -13,17 +14,25 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
+import android.graphics.PixelFormat;
+import android.graphics.drawable.GradientDrawable;
+import android.net.TrafficStats;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Message;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.os.UserManager;
 import android.provider.Settings;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.ViewConfiguration;
+import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -55,7 +64,7 @@ import java.util.Set;
  *   settings put secure enabled_accessibility_services com.gathin.tvhome/.HomeKeyService
  *   settings put secure accessibility_enabled 1
  */
-public class HomeKeyService extends AccessibilityService implements Runnable {
+public class HomeKeyService extends AccessibilityService implements Handler.Callback {
 
     /** restore_key_services was on when the config was read: this helper is noted for ServiceRepair. */
     private boolean repairRecord;
@@ -158,6 +167,7 @@ public class HomeKeyService extends AccessibilityService implements Runnable {
         if (gamepads != null) gamepads.stop();
         if (consumeVolumeKeys) VolumeKeys.stop();
         abortDeepClean();
+        stopMonitor();
         super.onDestroy();
     }
 
@@ -320,6 +330,7 @@ public class HomeKeyService extends AccessibilityService implements Runnable {
     /** Unbound by Android: the user turned the helper off, so Home doesn't put it back (ServiceRepair). */
     @Override
     public boolean onUnbind(Intent intent) {
+        stopMonitor();
         RemoteKeys.release(this);
         if (repairRecord && !steppingOut) ServiceRepair.disconnected(this, getClass());
         return super.onUnbind(intent);
@@ -421,7 +432,8 @@ public class HomeKeyService extends AccessibilityService implements Runnable {
 
     /** Lets the system see the key, so a long press still does what the firmware gives it. */
     private static final long HOME_KEY_DELAY_MS = 250;
-    private final Handler handler = new Handler(Looper.getMainLooper());
+    private static final int MSG_CLEAN = 1, MSG_HUD = 2;
+    private final Handler handler = new Handler(Looper.getMainLooper(), this);
 
     /** stock_home_redirect on the Home key: when the stock home is already on screen (it came up at boot, before
      *  Android bound this service), Home brings it up again with no window change, so the redirect above never
@@ -465,10 +477,130 @@ public class HomeKeyService extends AccessibilityService implements Runnable {
     private List<String> cleanQueue;
     private int cleanIndex, cleanStage, cleanTicks, cleanStopped, savedEventTypes = -1;
     private String forceStopText, okText;
+    private TextView hudView;
+    private WindowManager.LayoutParams hudLp;
+    private boolean hudLeft;
+    private long lastRxBytes, lastHudTime;
+    private BroadcastReceiver hudScreenOff;
 
     @Override
-    public void run() {
-        stepDeepClean();
+    public boolean handleMessage(Message msg) {
+        if (msg.what == MSG_CLEAN) stepDeepClean();
+        else if (msg.what == MSG_HUD) updateHud();
+        return true;
+    }
+
+    static boolean isMonitorActive() {
+        return running != null && running.hudView != null;
+    }
+
+    static boolean toggleMonitor() {
+        HomeKeyService service = running;
+        if (service == null) return false;
+        if (service.hudView != null) {
+            service.stopMonitor();
+            return false;
+        }
+        return service.startMonitor();
+    }
+
+    static void flipMonitorCorner() {
+        HomeKeyService service = running;
+        if (service == null) return;
+        service.hudLeft = !service.hudLeft;
+        if (service.hudView == null) {
+            service.startMonitor();
+            return;
+        }
+        service.hudLp.gravity = Gravity.TOP | (service.hudLeft ? Gravity.START : Gravity.END);
+        WindowManager wm = service.getSystemService(WindowManager.class);
+        if (wm != null) wm.updateViewLayout(service.hudView, service.hudLp);
+    }
+
+    private boolean startMonitor() {
+        if (hudView != null) return true;
+        WindowManager wm = getSystemService(WindowManager.class);
+        if (wm == null) return false;
+        float d = getResources().getDisplayMetrics().density;
+        TextView tv = new TextView(this);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xD20F172A);
+        bg.setCornerRadius(100f * d);
+        bg.setStroke(Math.max(1, Math.round(d)), 0x5538BDF8);
+        tv.setBackground(bg);
+        int ph = Math.round(12 * d), pv = Math.round(5 * d);
+        tv.setPadding(ph, pv, ph, pv);
+        tv.setTextColor(0xFFF8FAFC);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+        tv.setTypeface(UiFont.get(this, R.string.font_medium));
+        tv.setSingleLine(true);
+        tv.setIncludeFontPadding(false);
+        hudLp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT);
+        hudLp.gravity = Gravity.TOP | (hudLeft ? Gravity.START : Gravity.END);
+        hudLp.x = Math.round(24 * d);
+        hudLp.y = Math.round(20 * d);
+        try {
+            wm.addView(tv, hudLp);
+        } catch (RuntimeException e) {
+            return false;
+        }
+        hudView = tv;
+        lastRxBytes = TrafficStats.getTotalRxBytes();
+        lastHudTime = SystemClock.elapsedRealtime();
+        if (hudScreenOff == null) {
+            hudScreenOff = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) stopMonitor();
+                }
+            };
+            registerReceiver(hudScreenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        }
+        updateHud();
+        return true;
+    }
+
+    private void updateHud() {
+        if (hudView == null) return;
+        long now = SystemClock.elapsedRealtime(), rx = TrafficStats.getTotalRxBytes(), dt = now - lastHudTime;
+        long tenths = dt > 0 && rx >= 0 && lastRxBytes >= 0 && rx >= lastRxBytes
+                ? Math.round((rx - lastRxBytes) * 8000.0 / dt / 100_000.0) : 0L;
+        lastRxBytes = rx;
+        lastHudTime = now;
+        ActivityManager am = getSystemService(ActivityManager.class);
+        ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+        if (am != null) am.getMemoryInfo(mi);
+        long freeMb = mi.availMem / 1048576L;
+        hudView.setText("↓ " + (tenths / 10) + "." + (tenths % 10) + " Mbps  ·  " + freeMb + " MB");
+        handler.removeMessages(MSG_HUD);
+        handler.sendEmptyMessageDelayed(MSG_HUD, 1500);
+    }
+
+    private void stopMonitor() {
+        handler.removeMessages(MSG_HUD);
+        if (hudScreenOff != null) {
+            try {
+                unregisterReceiver(hudScreenOff);
+            } catch (RuntimeException ignored) {
+            }
+            hudScreenOff = null;
+        }
+        if (hudView != null) {
+            WindowManager wm = getSystemService(WindowManager.class);
+            if (wm != null) {
+                try {
+                    wm.removeView(hudView);
+                } catch (RuntimeException ignored) {
+                }
+            }
+            hudView = null;
+        }
     }
 
     static boolean startDeepClean(List<String> pkgs) {
@@ -527,7 +659,7 @@ public class HomeKeyService extends AccessibilityService implements Runnable {
             }
             cleanStage = 0;
             cleanTicks = 0;
-            handler.postDelayed(this, 260);
+            handler.sendEmptyMessageDelayed(MSG_CLEAN, 260);
             return;
         }
         finishDeepClean(false, cleanStopped);
@@ -573,7 +705,7 @@ public class HomeKeyService extends AccessibilityService implements Runnable {
                 return;
             }
         }
-        handler.postDelayed(this, 220);
+        handler.sendEmptyMessageDelayed(MSG_CLEAN, 220);
     }
 
     private AccessibilityNodeInfo findCleanTarget(AccessibilityNodeInfo node, boolean stageZero) {
@@ -622,7 +754,7 @@ public class HomeKeyService extends AccessibilityService implements Runnable {
     }
 
     private void abortDeepClean() {
-        handler.removeCallbacks(this);
+        handler.removeMessages(MSG_CLEAN);
         cleanQueue = null;
         if (savedEventTypes >= 0) {
             AccessibilityServiceInfo info = getServiceInfo();

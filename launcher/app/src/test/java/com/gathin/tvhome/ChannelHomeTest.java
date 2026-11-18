@@ -9,6 +9,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class ChannelHomeTest {
+    @Test public void sixButtonsMirrorLeftAndRightShoulders() {
+        assertEquals(0, ChannelHome.buttonIndexForColumn(0, 4, 6));
+        assertEquals(2, ChannelHome.buttonIndexForColumn(1, 4, 6));
+        assertEquals(3, ChannelHome.buttonIndexForColumn(2, 4, 6));
+        assertEquals(5, ChannelHome.buttonIndexForColumn(3, 4, 6));
+    }
+
     @Test public void fiveButtonsLandOnProfileStoreCleanAndSettings() {
         assertEquals(0, ChannelHome.buttonIndexForColumn(0, 4, 5));
         assertEquals(1, ChannelHome.buttonIndexForColumn(1, 4, 5));
