@@ -16,6 +16,8 @@ import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -62,13 +64,18 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     static final float CONTENT_BOTTOM_DP = BAR_DP - SHOULDER_DP, CONTENT_TOP_DP = 10;
     private static final float CURVE_FROM = 0.262f, CURVE_TO = 0.392f;
     static final int[] TILE_COLORS = {0xFFF7F7F9, 0xFFE0E2E7, 0xFFEBEDF1};
+    private static final int[] DARK_TILE_COLORS = {0xFF1C2436, 0xFF141B29, 0xFF182030};
     static final int INK = 0xFF2B3A55;
+    private static final int DARK_INK = 0xFFEAF0FA, DARK_BG = 0xFF0E131F;
+    private static final String PREF_DARK = "channel_dark";
+    private static boolean dark;
 
     private final MainActivity host;
+    private final FrameLayout rootView;
     private final RecyclerView grid;
     private final AppAdapter adapter;
     private final View btnSettings;
-    private final int columns, rows, sidePadding, accent;
+    private final int columns, rows, sidePadding, accent, lightBg;
     private final float density;
     private final List<View> buttons = new ArrayList<>();
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -79,18 +86,20 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     private int shaderHeight = -1, netState = Integer.MIN_VALUE;
     private final boolean appLibrary;
     private View profile, shop, library, clean, settings;
-    private ImageView monitor, network;
+    private ImageView themeBtn, network;
     private Intent storeIntent;
+    private TextClock clockView;
     private TextView date;
     private java.time.format.DateTimeFormatter dateFormat;
-    private boolean cleaning, monState;
+    private boolean cleaning;
     private long cleanBeforeAvail, cleanDeletedBytes;
     private int cleanDeletedFiles;
 
-    private ChannelHome(MainActivity host, RecyclerView grid, AppAdapter adapter, View btnSettings,
-                        int columns, int rows, int sidePadding, int accent, boolean appLibrary) {
+    private ChannelHome(MainActivity host, FrameLayout rootView, RecyclerView grid, AppAdapter adapter, View btnSettings,
+                        int columns, int rows, int sidePadding, int accent, int lightBg, boolean appLibrary) {
         super(host);
         this.host = host;
+        this.rootView = rootView;
         this.grid = grid;
         this.adapter = adapter;
         this.btnSettings = btnSettings;
@@ -98,6 +107,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         this.rows = rows;
         this.sidePadding = sidePadding;
         this.accent = accent;
+        this.lightBg = lightBg;
         this.appLibrary = appLibrary;
         density = getResources().getDisplayMetrics().density;
         setWillNotDraw(false);
@@ -117,31 +127,38 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     }
 
     static Drawable tileBackground() {
-        return new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, TILE_COLORS);
+        return new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, dark ? DARK_TILE_COLORS : TILE_COLORS);
+    }
+
+    static int inkColor() {
+        return dark ? DARK_INK : INK;
     }
 
     static ChannelHome install(MainActivity host, Config cfg, FrameLayout root, RecyclerView grid, AppAdapter adapter,
                                String clockFormat, int sidePadding, View btnSettings) {
+        dark = host.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE).getBoolean(PREF_DARK, false);
+        root.setBackgroundColor(dark ? DARK_BG : cfg.backgroundColor);
         float density = host.getResources().getDisplayMetrics().density;
         int accent = cfg.channelAccent;
-        ChannelHome home = new ChannelHome(host, grid, adapter, btnSettings, cfg.columns, cfg.rowsBelowDock + 1,
-                sidePadding, accent, cfg.appLibrary);
+        ChannelHome home = new ChannelHome(host, root, grid, adapter, btnSettings, cfg.columns, cfg.rowsBelowDock + 1,
+                sidePadding, accent, cfg.backgroundColor, cfg.appLibrary);
 
         Typeface medium = UiFont.get(host, R.string.font_medium);
         TextClock clock = new TextClock(host);
         clock.setFormat12Hour("h:mm a");
         clock.setFormat24Hour("HH:mm");
-        clock.setTextColor(INK);
+        clock.setTextColor(inkColor());
         clock.setTextSize(TypedValue.COMPLEX_UNIT_SP, 34f);
         clock.setTypeface(medium);
         clock.setIncludeFontPadding(false);
+        home.clockView = clock;
         LayoutParams clockLp = new LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         clockLp.topMargin = Math.round((SHOULDER_DP + 4) * density);
         home.addView(clock, clockLp);
 
         TextView date = new TextView(host);
-        date.setTextColor(INK);
+        date.setTextColor(inkColor());
         date.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f);
         date.setTypeface(medium);
         date.setSingleLine(true);
@@ -202,12 +219,11 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
             home.add(lib, small, Gravity.START, left2, shoulderMid, false);
             hasSecondLeft = true;
         }
-        ImageView monitor = new ImageView(host);
-        monitor.setScaleType(ImageView.ScaleType.CENTER);
-        monitor.setContentDescription("Monitor");
-        home.monitor = monitor;
-        home.syncMonitorIcon(true);
-        home.add(monitor, small, Gravity.START, hasSecondLeft ? edgePx + big + small + 2 * gap : left2, shoulderMid, true);
+        ImageView themeBtn = new ImageView(host);
+        themeBtn.setScaleType(ImageView.ScaleType.CENTER);
+        home.themeBtn = themeBtn;
+        home.updateThemeButton();
+        home.add(themeBtn, small, Gravity.START, hasSecondLeft ? edgePx + big + small + 2 * gap : left2, shoulderMid, true);
 
         ImageView clean = new ImageView(host);
         clean.setScaleType(ImageView.ScaleType.CENTER);
@@ -245,7 +261,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
 
     private Drawable disc(boolean focused) {
         GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0xFFFFFFFF, 0xFFECEEF3});
+                dark ? new int[]{0xFF222C42, 0xFF171F30} : new int[]{0xFFFFFFFF, 0xFFECEEF3});
         d.setShape(GradientDrawable.OVAL);
         d.setStroke(Math.round((focused ? 5f : 3f) * density), accent);
         return d;
@@ -289,7 +305,13 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         band.lineTo(w + 8 * density, h);
         band.lineTo(-8 * density, h);
         band.close();
-        bandShader = new LinearGradient(0, shoulder, 0, h, 0xFFE4E7ED, 0xFFCDD1DA, Shader.TileMode.CLAMP);
+        updateBandShader(h);
+    }
+
+    private void updateBandShader(int h) {
+        float shoulder = h - Math.round(BAR_DP * density) + SHOULDER_DP * density;
+        bandShader = new LinearGradient(0, shoulder, 0, h,
+                dark ? 0xFF171F30 : 0xFFE4E7ED, dark ? 0xFF0E1420 : 0xFFCDD1DA, Shader.TileMode.CLAMP);
     }
 
     @Override
@@ -323,9 +345,10 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
                 tmpRect.set(0, 0, gridHost.getWidth(), pageBottom);
                 ((ViewGroup) getParent()).offsetDescendantRectToMyCoords(gridHost, tmpRect);
                 float radius = AppAdapter.cornerRadius(card.getWidth(), density);
-                if (shaderHeight != card.getHeight()) {
+                if (shaderHeight != card.getHeight() || tileShader == null) {
                     shaderHeight = card.getHeight();
-                    tileShader = new LinearGradient(0, 0, 0, shaderHeight, TILE_COLORS, null, Shader.TileMode.CLAMP);
+                    tileShader = new LinearGradient(0, 0, 0, shaderHeight,
+                            dark ? DARK_TILE_COLORS : TILE_COLORS, null, Shader.TileMode.CLAMP);
                 }
                 canvas.save();
                 canvas.clipRect(tmpRect);
@@ -341,7 +364,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
                     paint.setShader(null);
                     paint.setStyle(Paint.Style.STROKE);
                     paint.setStrokeWidth(density);
-                    paint.setColor(0x14203050);
+                    paint.setColor(dark ? 0x1FFFFFFF : 0x14203050);
                     canvas.drawRoundRect(rect, radius, radius, paint);
                     canvas.restore();
                 }
@@ -354,7 +377,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         paint.setShader(null);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(2f * density);
-        paint.setColor(0xCCFFFFFF);
+        paint.setColor(dark ? 0x22FFFFFF : 0xCCFFFFFF);
         canvas.save();
         canvas.translate(0, 3f * density);
         canvas.drawPath(edge, paint);
@@ -369,7 +392,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
             float step = 18f * density, radius = 4.5f * density;
             float y = (getHeight() - Math.round(CONTENT_BOTTOM_DP * density)) / 2f - step * (pages - 1) / 2f;
             for (int i = 0; i < pages; i++) {
-                paint.setColor(i == page ? accent : 0x33203050);
+                paint.setColor(i == page ? accent : (dark ? 0x3DFFFFFF : 0x33203050));
                 canvas.drawCircle(cx, y + i * step, i == page ? radius * 1.25f : radius, paint);
             }
         }
@@ -397,7 +420,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         if (v == profile) host.open(SystemSettings.intent(host, Settings.ACTION_SYNC_SETTINGS));
         else if (v == shop && storeIntent != null) host.open(new Intent(storeIntent));
         else if (v == library) host.onLibraryRequested();
-        else if (v == monitor) toggleMonitor();
+        else if (v == themeBtn) toggleDarkMode();
         else if (v == clean) runInstantClean();
         else if (v == network) host.openNetworkPill();
         else if (v == settings) btnSettings.performClick();
@@ -406,7 +429,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     @Override
     public boolean onLongClick(View v) {
         if (v == settings) btnSettings.performLongClick();
-        else if (v == monitor) host.showMonitorMenu(monitor);
+        else if (v == themeBtn) host.showNightMenu(themeBtn);
         else if (v == clean) host.showCleanMenu(clean);
         else if (v == profile && appLibrary) host.onLibraryRequested();
         else if (v == network) host.open(SystemSettings.intent(host, Settings.ACTION_WIFI_SETTINGS));
@@ -449,7 +472,6 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     }
 
     void showNetwork(boolean online, boolean ethernet, int level) {
-        syncMonitorIcon(false);
         if (network == null) return;
         level = Math.max(0, Math.min(4, level));
         int state = !online ? -1 : ethernet ? 5 : level;
@@ -471,7 +493,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         Canvas c = new Canvas(bmp);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         float cx = inner / 2f, cy = inner / 2f, r = inner / 2f;
-        int pale = 0x40203050;
+        int pale = dark ? 0x44FFFFFF : 0x40203050;
         float base = cy + r * 0.42f, w = r * 0.16f;
         p.setColor(online && level > 0 ? accent : pale);
         c.drawCircle(cx, base - w * 0.3f, w * 0.75f, p);
@@ -520,41 +542,58 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         return column * 2 < columns ? Math.max(0, buttonCount - 3) : Math.max(0, buttonCount - 2);
     }
 
-    void syncMonitorIcon(boolean force) {
-        if (monitor == null) return;
-        boolean active = HomeKeyService.isMonitorActive();
-        if (!force && active == monState) return;
-        monState = active;
-        monitor.setImageBitmap(monitorIcon(Math.round(44 * density), active ? 0xFF16A34A : accent));
+    private void toggleDarkMode() {
+        dark = !dark;
+        host.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE).edit().putBoolean(PREF_DARK, dark).apply();
+        rootView.setBackgroundColor(dark ? DARK_BG : lightBg);
+        if (clockView != null) clockView.setTextColor(inkColor());
+        if (date != null) date.setTextColor(inkColor());
+        tileShader = null;
+        if (getHeight() > 0) updateBandShader(getHeight());
+        for (View b : buttons) b.setBackground(disc(b.isFocused()));
+        int prev = netState;
+        netState = Integer.MIN_VALUE;
+        if (prev != Integer.MIN_VALUE) showNetwork(prev >= 0, prev == 5, Math.max(0, prev));
+        updateThemeButton();
+        grid.getRecycledViewPool().clear();
+        adapter.notifyDataSetChanged();
+        invalidate();
+        if (themeBtn != null) themeBtn.post(themeBtn::requestFocus);
     }
 
-    private void toggleMonitor() {
-        boolean es = "es".equals(Locale.getDefault().getLanguage());
-        if (!HomeKeyService.canOpenPowerMenu()) {
-            Toast.makeText(host, es ? "Activa el servicio de teclas para el monitor"
-                    : "Enable Home key service for monitor", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        boolean on = HomeKeyService.toggleMonitor();
-        syncMonitorIcon(true);
-        if (!on) Toast.makeText(host, es ? "Monitor oculto" : "Monitor hidden", Toast.LENGTH_SHORT).show();
+    private void updateThemeButton() {
+        if (themeBtn == null) return;
+        themeBtn.setContentDescription("es".equals(Locale.getDefault().getLanguage())
+                ? (dark ? "Modo claro" : "Modo oscuro")
+                : (dark ? "Light mode" : "Dark mode"));
+        themeBtn.setImageBitmap(themeIcon(Math.round(44 * density), dark, accent));
     }
 
-    private static Bitmap monitorIcon(int size, int color) {
+    private static Bitmap themeIcon(int size, boolean isDark, int accent) {
         Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(out);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setColor(color);
-        p.setStrokeCap(Paint.Cap.ROUND);
-        float r = size / 2f, cx = r, cy = r * 1.08f, rad = r * 0.66f;
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(r * 0.16f);
-        RectF oval = new RectF(cx - rad, cy - rad, cx + rad, cy + rad);
-        c.drawArc(oval, 150f, 240f, false, p);
-        p.setStrokeWidth(r * 0.14f);
-        c.drawLine(cx, cy, cx + r * 0.36f, cy - r * 0.36f, p);
-        p.setStyle(Paint.Style.FILL);
-        c.drawCircle(cx, cy, r * 0.14f, p);
+        float r = size / 2f;
+        if (!isDark) {
+            p.setColor(accent);
+            c.drawCircle(r, r, r * 0.54f, p);
+            p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));
+            c.drawCircle(r + r * 0.24f, r - r * 0.18f, r * 0.46f, p);
+            p.setXfermode(null);
+            sparkle(c, p, new Path(), r + r * 0.34f, r - r * 0.26f, r * 0.16f);
+        } else {
+            p.setColor(0xFFFBBF24);
+            c.drawCircle(r, r, r * 0.28f, p);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(r * 0.12f);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            for (int i = 0; i < 8; i++) {
+                double a = i * Math.PI / 4.0;
+                float cos = (float) Math.cos(a), sin = (float) Math.sin(a);
+                c.drawLine(r + cos * r * 0.45f, r + sin * r * 0.45f,
+                        r + cos * r * 0.65f, r + sin * r * 0.65f, p);
+            }
+        }
         return out;
     }
 

@@ -428,8 +428,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             // Before the Holder is made: it keeps the card's background to put back under icon tiles.
             card.setBackground(ChannelHome.tileBackground());
             card.setElevation(3f * density);
-            ((TextView) v.findViewById(R.id.label)).setTextColor(ChannelHome.INK);
-            ((TextView) v.findViewById(R.id.name)).setTextColor(ChannelHome.INK);
+            int ink = ChannelHome.inkColor();
+            ((TextView) v.findViewById(R.id.label)).setTextColor(ink);
+            ((TextView) v.findViewById(R.id.name)).setTextColor(ink);
         }
         View name = v.findViewById(R.id.name);
         ViewGroup.MarginLayoutParams nameLp = (ViewGroup.MarginLayoutParams) name.getLayoutParams();
@@ -501,6 +502,12 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         h.banner.setScaleY(focused && advancedEffects ? 1.035f : 1f);
         // A fully opaque banner covers the whole card (centerCrop), so the card's own fill under it is drawn for
         // nothing on every frame; keep it under banners with transparent parts and under icon tiles.
+        if (channelHome) {
+            int ink = ChannelHome.inkColor();
+            h.name.setTextColor(ink);
+            h.label.setTextColor(ink);
+            h.cardBackground = ChannelHome.tileBackground();
+        }
         h.card.setBackground(e.banner != null && e.banner.getOpacity() == PixelFormat.OPAQUE ? null : h.cardBackground);
         if ((uniformTiles || channelHome) && e.banner == null) {
             if (e.backdrop == null) e.backdrop = backdrop(e.icon, ambientColorAt(position));
@@ -904,7 +911,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             implements View.OnKeyListener, View.OnFocusChangeListener, View.OnClickListener, View.OnLongClickListener {
         final View card;
         /** item_app.xml's tile_bg: the dark card behind an icon tile, or behind a banner that has transparent parts. */
-        final Drawable cardBackground;
+        Drawable cardBackground;
         final ImageView banner;
         final ImageView icon;
         final TextView label;
