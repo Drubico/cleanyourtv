@@ -692,6 +692,28 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         }
     }
 
+    /**
+     * The "clean" action word of app_keys (a held remote button): the quick clean (background apps and leftover
+     * installer APKs), then the recent apps closed for good through Settings' Force stop, as the clean menu does.
+     * Without the key helper only the quick clean runs, and a toast says how much memory is free.
+     */
+    static void remoteClean(Context ctx) {
+        long before = availMemBytes(ctx);
+        killBackgroundApps(ctx);
+        long[] apks = deleteInstallerApks();
+        if (HomeKeyService.startDeepClean(deepCleanTargets(ctx))) return;
+        long after = availMemBytes(ctx);
+        long freedMb = Math.max(0L, (after - before) / 1048576L), freeMb = after / 1048576L;
+        boolean es = "es".equals(Locale.getDefault().getLanguage());
+        String msg = es
+                ? (freedMb > 0 ? "Liberados " + freedMb + " MB · " + freeMb + " MB libres"
+                        : "Todo cerrado · " + freeMb + " MB libres")
+                : (freedMb > 0 ? "Freed " + freedMb + " MB · " + freeMb + " MB free"
+                        : "All closed · " + freeMb + " MB free");
+        if (apks[0] > 0) msg += " · +" + Math.max(1L, apks[1] / 1048576L) + " MB (" + apks[0] + " APK)";
+        Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show();
+    }
+
     static List<String> deepCleanTargets(Context ctx) {
         PackageManager pm = ctx.getPackageManager();
         Set<String> keep = protectedPackages(ctx);

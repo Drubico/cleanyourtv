@@ -356,7 +356,7 @@ final class RemoteKeys {
     static boolean isAction(String target) {
         switch (target) {
             case "back": case "home": case "recents": case "mute": case "sleep":
-            case "screensaver": case "settings": case "wifi": case "library": case "ignore":
+            case "screensaver": case "settings": case "wifi": case "library": case "clean": case "ignore":
                 return true;
             default:
                 return false;
@@ -399,6 +399,10 @@ final class RemoteKeys {
             case "library":
                 // Home with the App library open on top; Home does nothing when app_library is off.
                 start(ctx, new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_APP_LIBRARY));
+                break;
+            case "clean":
+                // The Home bar's clean, then a force stop of the recent apps (channel_home's clean menu).
+                ChannelHome.remoteClean(ctx);
                 break;
             default:
                 break;   // "ignore", or "sleep" below Android 9: consumed, nothing to do
