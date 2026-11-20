@@ -17,6 +17,10 @@
     "190:com.google.android.youtube.tv",
     "hold:190:clean",
     "191:com.kick.mobile",
-    "hold:191:tv.twitch.android.app"
+    "hold:191:tv.twitch.android.app",
+    "84:sleep",
+    "hold:84:screensaver",
+    "219:sleep",
+    "hold:219:screensaver"
   ]
 }
