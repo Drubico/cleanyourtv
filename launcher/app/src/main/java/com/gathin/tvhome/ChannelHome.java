@@ -92,8 +92,6 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     private TextView date;
     private java.time.format.DateTimeFormatter dateFormat;
     private boolean cleaning;
-    private long cleanBeforeAvail, cleanDeletedBytes;
-    private int cleanDeletedFiles;
 
     private ChannelHome(MainActivity host, FrameLayout rootView, RecyclerView grid, AppAdapter adapter, View btnSettings,
                         int columns, int rows, int sidePadding, int accent, int lightBg, boolean appLibrary) {
@@ -604,35 +602,19 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
         target.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
     }
 
+    /** The bar's clean button: a spin, then remoteClean (quick clean, then a force stop of the recent apps). */
     private void runInstantClean() {
         if (cleaning) return;
         cleaning = true;
         clean.setRotation(0f);
         clean.animate().rotation(360f).setDuration(420).start();
-        cleanBeforeAvail = availMemBytes(host);
-        killBackgroundApps(host);
-        long[] apks = deleteInstallerApks();
-        cleanDeletedFiles = (int) apks[0];
-        cleanDeletedBytes = apks[1];
-        postDelayed(this, 280);
+        postDelayed(this, 420);
     }
 
     @Override
     public void run() {
         cleaning = false;
-        long afterAvail = availMemBytes(host);
-        long freedMb = Math.max(0L, (afterAvail - cleanBeforeAvail) / 1048576L);
-        long freeMb = afterAvail / 1048576L;
-        boolean es = "es".equals(Locale.getDefault().getLanguage());
-        String msg = es
-                ? (freedMb > 0 ? "Liberados " + freedMb + " MB · " + freeMb + " MB libres"
-                        : "RAM al día · " + freeMb + " MB libres")
-                : (freedMb > 0 ? "Freed " + freedMb + " MB · " + freeMb + " MB free"
-                        : "RAM clean · " + freeMb + " MB free");
-        if (cleanDeletedFiles > 0) {
-            msg += " · +" + Math.max(1L, cleanDeletedBytes / 1048576L) + " MB (" + cleanDeletedFiles + " APK)";
-        }
-        Toast.makeText(host, msg, Toast.LENGTH_LONG).show();
+        remoteClean(host);
     }
 
     private static long availMemBytes(Context ctx) {
@@ -693,7 +675,7 @@ final class ChannelHome extends FrameLayout implements View.OnKeyListener, View.
     }
 
     /**
-     * The "clean" action word of app_keys (a held remote button): the quick clean (background apps and leftover
+     * The bar's clean button and the "clean" action word of app_keys (a held remote button): the quick clean (background apps and leftover
      * installer APKs), then the recent apps closed for good through Settings' Force stop, as the clean menu does.
      * Without the key helper only the quick clean runs, and a toast says how much memory is free.
      */
