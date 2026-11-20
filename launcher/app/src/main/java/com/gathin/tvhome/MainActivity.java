@@ -3960,16 +3960,9 @@ public class MainActivity extends Activity
         LinearLayout rows = panel.findViewById(R.id.rows);
         PopupWindow popup = glassPopup(panel, (int) (220 * density));
         boolean es = "es".equals(Locale.getDefault().getLanguage());
-        addSettingsMenuRow(rows, es ? "Cerrar apps de raíz" : "Force stop apps", () -> {
-            ChannelHome.killBackgroundApps(this);
-            List<String> targets = ChannelHome.deepCleanTargets(this);
-            if (targets.isEmpty() && HomeKeyService.canOpenPowerMenu()) {
-                Toast.makeText(this, es ? "Todas las apps ya están cerradas"
-                        : "All background apps are already stopped", Toast.LENGTH_SHORT).show();
-            } else if (!HomeKeyService.startDeepClean(targets)) {
-                open(systemIntent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS));
-            }
-        });
+        // The same clean as the bar's button and a held YouTube button: RAM, leftover APKs, then a force stop.
+        addSettingsMenuRow(rows, es ? "Limpiar y cerrar apps" : "Clean and force stop apps",
+                () -> ChannelHome.remoteClean(this));
         addSettingsMenuRow(rows, es ? "Almacenamiento y caché" : "Storage & cache", () -> {
             Intent s = new Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS);
             open(getPackageManager().resolveActivity(s, PackageManager.MATCH_DEFAULT_ONLY) != null
