@@ -898,10 +898,8 @@ public class MainActivity extends Activity
         if (cfg.channelHome) setUpChannelHome(cfg, btnSettings);
 
         // Hide the glass when focus leaves the tiles.
-        getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
-            boolean onTile = newF != null && newF.getId() == R.id.card;
-            if (!onTile) hideGlass();
-        });
+        // Taken off in onDestroy: recreate() keeps the window, and a listener left on it held every earlier Home.
+        getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener(glassFocusListener);
 
         packageFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
         packageFilter.addAction(Intent.ACTION_PACKAGE_REMOVED);
@@ -923,7 +921,10 @@ public class MainActivity extends Activity
             }
         }
 
-        ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+        // From the application, not this activity: on Android 12 a ConnectivityManager keeps the context it was
+        // made with (its static sInstance, and the callback Messenger the system holds), so every recreate() left
+        // the previous Home and its bitmaps behind.
+        ConnectivityManager cm = getApplicationContext().getSystemService(ConnectivityManager.class);
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         if (tim != null) tim.registerCallback(inputCallback, handler);
         if (cm != null) {
@@ -1415,15 +1416,23 @@ public class MainActivity extends Activity
         }
     }
 
+    /** Hides the glass when focus leaves the tiles (added in onCreate, removed in onDestroy). */
+    private final ViewTreeObserver.OnGlobalFocusChangeListener glassFocusListener = (oldF, newF) -> {
+        boolean onTile = newF != null && newF.getId() == R.id.card;
+        if (!onTile) hideGlass();
+    };
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        ViewTreeObserver tree = getWindow().getDecorView().getViewTreeObserver();
+        if (tree.isAlive()) tree.removeOnGlobalFocusChangeListener(glassFocusListener);
         RemoteKeys.release(this);
         cancelHoldOk();
         if (gameDay != null) gameDay.shutdown();
         unregisterReceiver(packageReceiver);
         wallpaperPlayer.close();
-        ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+        ConnectivityManager cm = getApplicationContext().getSystemService(ConnectivityManager.class);   // as registered
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         if (tim != null) tim.unregisterCallback(inputCallback);
         if (cm != null) {
@@ -2982,7 +2991,7 @@ public class MainActivity extends Activity
         int flame = 0;
         boolean steady = false;
         try {
-            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            ConnectivityManager cm = getApplicationContext().getSystemService(ConnectivityManager.class);
             boolean wifi = false, ethernet = false;
             // All networks, not just the active one: with a VPN up the active network is the VPN itself.
             for (Network net : cm != null ? cm.getAllNetworks() : new Network[0]) {

@@ -181,6 +181,8 @@ final class Config {
     final boolean gamepadPassthrough;
     /** With keyFilter on, the key services swallow Volume Up/Down and repeat a held one themselves (consume_volume_keys). */
     final boolean consumeVolumeKeys;
+    /** With keyFilter on, a volume change stops the key services filtering for a few seconds (volume_pauses_filter). */
+    final boolean volumePausesFilter;
     /** Channel Up/Down do nothing while Home is in front, instead of opening the TV's Live TV app. */
     final boolean homeIgnoreChannelKeys;
     /** Stock launcher whose home screen is sent back here if the firmware revives it (config.xml stock_home_redirect). */
@@ -401,6 +403,7 @@ final class Config {
         boolean keyFilter = res.getBoolean(R.bool.key_filter);
         boolean gamepadPassthrough = res.getBoolean(R.bool.gamepad_passthrough);
         boolean consumeVolumeKeys = res.getBoolean(R.bool.consume_volume_keys);
+        boolean volumePausesFilter = res.getBoolean(R.bool.volume_pauses_filter);
         boolean homeIgnoreChannelKeys = res.getBoolean(R.bool.home_ignore_channel_keys);
         boolean powerOnHome = res.getBoolean(R.bool.power_on_home);
         boolean homeLongPressHome = res.getBoolean(R.bool.home_long_press_home);
@@ -517,6 +520,7 @@ final class Config {
             keyFilter = bool(json, "key_filter", keyFilter);
             gamepadPassthrough = bool(json, "gamepad_passthrough", gamepadPassthrough);
             consumeVolumeKeys = bool(json, "consume_volume_keys", consumeVolumeKeys);
+            volumePausesFilter = bool(json, "volume_pauses_filter", volumePausesFilter);
             homeIgnoreChannelKeys = bool(json, "home_ignore_channel_keys", homeIgnoreChannelKeys);
             powerOnHome = bool(json, "power_on_home", powerOnHome);
             homeLongPressHome = bool(json, "home_long_press_home", homeLongPressHome);
@@ -715,6 +719,7 @@ final class Config {
         this.wallpaperMoods = wallpaperMoods;
         this.gamepadPassthrough = gamepadPassthrough;
         this.consumeVolumeKeys = consumeVolumeKeys;
+        this.volumePausesFilter = volumePausesFilter;
         this.homeIgnoreChannelKeys = homeIgnoreChannelKeys;
         this.powerOnHome = powerOnHome;
         this.homeLongPressHome = homeLongPressHome;

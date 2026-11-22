@@ -42,6 +42,8 @@ final class ClockScene implements Runnable, View.OnLayoutChangeListener {
     private final GradientDrawable glow;
     private int colorIndex, glowColor, glowFrom, glowTo, glowStep;
     private boolean wallpaperShown;
+    /** clock_glow false: plain black behind the clock, whether or not a picture shows. */
+    private boolean glowOff;
     private File wallpaperFile;
     private int wallpaperShade, wallpaperGeneration;
     private Resources wallpaperRes;
@@ -80,7 +82,7 @@ final class ClockScene implements Runnable, View.OnLayoutChangeListener {
         }
         moveClock();
         advanceWallpaper();
-        if (!wallpaperShown) {
+        if (!wallpaperShown && !glowOff) {
             glowFrom = glowColor;
             colorIndex = (colorIndex + 1) % PALETTE.length;
             glowTo = PALETTE[colorIndex];
@@ -119,13 +121,10 @@ final class ClockScene implements Runnable, View.OnLayoutChangeListener {
         } catch (RuntimeException e) {
             return;
         }
-        if (!cfg.clockWallpaper) {
-            if (!cfg.clockGlow) {
-                wallpaperShown = true;
-                ambient.setBackground(null);
-            }
-            return;
-        }
+        // clock_glow false: plain black behind the clock (OLED); the clock itself still moves every minute.
+        glowOff = !cfg.clockGlow;
+        if (glowOff) ambient.setBackground(null);
+        if (!cfg.clockWallpaper) return;
         if (cfg.wallpapers.isEmpty()) {
             wallpaperFile = null;
         } else {
